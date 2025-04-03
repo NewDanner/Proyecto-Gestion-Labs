@@ -37,7 +37,6 @@ public class RegisterForm extends JFrame {
         gbc.insets = new Insets(5, 5, 5, 5);
         gbc.fill = GridBagConstraints.HORIZONTAL;
         
-        // Username
         gbc.gridx = 0;
         gbc.gridy = 0;
         panel.add(new JLabel("Usuario:"), gbc);
@@ -47,7 +46,6 @@ public class RegisterForm extends JFrame {
         txtUsername = new JTextField(20);
         panel.add(txtUsername, gbc);
         
-        // Password
         gbc.gridx = 0;
         gbc.gridy = 1;
         gbc.gridwidth = 1;
@@ -58,7 +56,6 @@ public class RegisterForm extends JFrame {
         txtPassword = new JPasswordField(20);
         panel.add(txtPassword, gbc);
         
-        // CI
         gbc.gridx = 0;
         gbc.gridy = 2;
         gbc.gridwidth = 1;
@@ -69,9 +66,6 @@ public class RegisterForm extends JFrame {
         txtCI = new JTextField(20);
         panel.add(txtCI, gbc);
         
-        // Role (hidden, default coordinador)
-        
-        // Button
         gbc.gridx = 1;
         gbc.gridy = 3;
         gbc.gridwidth = 1;

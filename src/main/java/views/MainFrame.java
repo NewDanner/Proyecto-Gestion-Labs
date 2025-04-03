@@ -3,22 +3,21 @@ package views;
 import models.User;
 import javax.swing.*;
 import java.awt.*;
-import java.awt.event.ActionEvent;
-import views.panels.DashboardPanel;
-import views.panels.LabsPanel;
-import views.panels.ReservacionPanel;
-import views.panels.MantenimientoPanel;
+import java.awt.event.*;
+import views.panels.*;
 
 public class MainFrame extends JFrame {
     private User currentUser;
     private JPanel mainPanel;
     private CardLayout cardLayout;
     
-    // Paneles
     private DashboardPanel dashboardPanel;
     private LabsPanel labsPanel;
+    private CalendarPanel calendarPanel;
     private ReservacionPanel reservacionPanel;
     private MantenimientoPanel mantenimientoPanel;
+    private ReportesPanel reportesPanel;
+    private UsuarioPanel usuarioPanel;
     
     public MainFrame(User user) {
         this.currentUser = user;
@@ -28,21 +27,51 @@ public class MainFrame extends JFrame {
     private void initComponents() {
         setTitle("Sistema de Gestión de Laboratorios - " + currentUser.getUsername());
         setDefaultCloseOperation(JFrame.EXIT_ON_CLOSE);
-        setSize(900, 600);
+        setSize(1200, 800);
         setLocationRelativeTo(null);
         
-        // Crear el menú
+        // Configurar fuente más grande
+        Font largerFont = new Font("Arial", Font.PLAIN, 14);
+        UIManager.put("Button.font", largerFont);
+        UIManager.put("Label.font", largerFont);
+        UIManager.put("TextField.font", largerFont);
+        UIManager.put("ComboBox.font", largerFont);
+        
+        // Barra de menú superior
         JMenuBar menuBar = new JMenuBar();
         
+        // Menú Opciones
         JMenu menuOpciones = new JMenu("Opciones");
+        menuOpciones.setFont(new Font("Arial", Font.BOLD, 14));
+        
         JMenuItem itemSalir = new JMenuItem("Salir");
         itemSalir.addActionListener(e -> System.exit(0));
         menuOpciones.add(itemSalir);
-        menuBar.add(menuOpciones);
         
+        // Menú Reportes
+        JMenu menuReportes = new JMenu("Reportes");
+        menuReportes.setFont(new Font("Arial", Font.BOLD, 14));
+        JMenuItem itemReportes = new JMenuItem("Ver Reportes");
+        itemReportes.addActionListener(e -> showPanel("reportes"));
+        menuReportes.add(itemReportes);
+        
+        // Menú Usuario
+        JMenu menuUsuario = new JMenu("Usuario");
+        menuUsuario.setFont(new Font("Arial", Font.BOLD, 14));
+        JMenuItem itemPerfil = new JMenuItem("Mi Perfil");
+        itemPerfil.addActionListener(e -> showPanel("usuario"));
+        menuUsuario.add(itemPerfil);
+        
+        JMenuItem itemCerrarSesion = new JMenuItem("Cerrar Sesión");
+        itemCerrarSesion.addActionListener(this::cerrarSesion);
+        menuUsuario.add(itemCerrarSesion);
+        
+        menuBar.add(menuOpciones);
+        menuBar.add(menuReportes);
+        menuBar.add(menuUsuario);
         setJMenuBar(menuBar);
         
-        // Crear la barra de herramientas
+        // Barra de herramientas
         JToolBar toolBar = new JToolBar();
         toolBar.setFloatable(false);
         
@@ -54,62 +83,63 @@ public class MainFrame extends JFrame {
         btnLabs.addActionListener(e -> showPanel("labs"));
         toolBar.add(btnLabs);
         
+        JButton btnCalendar = new JButton("Calendario");
+        btnCalendar.addActionListener(e -> showPanel("calendar"));
+        toolBar.add(btnCalendar);
+        
         JButton btnReservations = new JButton("Reservas");
-        btnReservations.addActionListener(e -> showPanel("reservaciones"));
+        btnReservations.addActionListener(e -> showPanel("reservations"));
         toolBar.add(btnReservations);
         
         JButton btnMaintenance = new JButton("Mantenimiento");
-        btnMaintenance.addActionListener(e -> showPanel("mantenimiento"));
+        btnMaintenance.addActionListener(e -> showPanel("maintenance"));
         toolBar.add(btnMaintenance);
         
         add(toolBar, BorderLayout.NORTH);
         
-        // Crear el panel principal con CardLayout
+        // Panel principal
         cardLayout = new CardLayout();
         mainPanel = new JPanel(cardLayout);
         
-        // Inicializar paneles
         dashboardPanel = new DashboardPanel(currentUser);
         labsPanel = new LabsPanel();
+        calendarPanel = new CalendarPanel();
         reservacionPanel = new ReservacionPanel();
         mantenimientoPanel = new MantenimientoPanel();
+        reportesPanel = new ReportesPanel();
+        usuarioPanel = new UsuarioPanel(currentUser, this);
         
-        // Agregar paneles al CardLayout
         mainPanel.add("dashboard", dashboardPanel);
         mainPanel.add("labs", labsPanel);
+        mainPanel.add("calendar", calendarPanel);
+        mainPanel.add("reservations", reservacionPanel);
+        mainPanel.add("maintenance", mantenimientoPanel);
+        mainPanel.add("reportes", reportesPanel);
+        mainPanel.add("usuario", usuarioPanel);
         
         add(mainPanel, BorderLayout.CENTER);
-        
-        // Mostrar el panel de inicio por defecto
         showPanel("dashboard");
     }
     
     private void showPanel(String panelName) {
         cardLayout.show(mainPanel, panelName);
-        
-        // Actualizar datos al mostrar el panel
-        switch (panelName) {
-            case "dashboard":
-                dashboardPanel = new DashboardPanel(currentUser);
-                break;
-            case "labs":
-                labsPanel = new LabsPanel();
-                break;
-            case "reservaciones":
-                reservacionPanel = new ReservacionPanel();
-                break;
-            case "mantenimiento":
-                mantenimientoPanel = new MantenimientoPanel();
-                break;
-        }
     }
     
-    private void updateTitle() {
-        setTitle("Sistema de Gestión de Laboratorios - " + currentUser.getUsername());
+    private void cerrarSesion(ActionEvent e) {
+        int confirm = JOptionPane.showConfirmDialog(this, 
+            "¿Está seguro que desea cerrar sesión?",
+            "Confirmar Cierre de Sesión", 
+            JOptionPane.YES_NO_OPTION);
+        
+        if (confirm == JOptionPane.YES_OPTION) {
+            this.dispose();
+            new views.LoginForm().setVisible(true);
+        }
     }
     
     public void setCurrentUser(User user) {
         this.currentUser = user;
-        updateTitle();
+        usuarioPanel.setUser(user);
+        setTitle("Sistema de Gestión de Laboratorios - " + currentUser.getUsername());
     }
 }

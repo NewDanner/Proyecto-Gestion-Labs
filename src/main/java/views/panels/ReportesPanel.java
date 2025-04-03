@@ -11,13 +11,15 @@ package views.panels;
 import javax.swing.*;
 import java.awt.*;
 
-public class MantenimientoPanel extends JPanel {
-    public MantenimientoPanel() {
+public class ReportesPanel extends JPanel {
+    public ReportesPanel() {
         initComponents();
     }
     
     private void initComponents() {
         setLayout(new BorderLayout());
-        add(new JLabel("Panel de Mantenimiento - En construcción", SwingConstants.CENTER), BorderLayout.CENTER);
+        JLabel lblMensaje = new JLabel("Reportes - En construcción", SwingConstants.CENTER);
+        lblMensaje.setFont(new Font("Arial", Font.BOLD, 16));
+        add(lblMensaje, BorderLayout.CENTER);
     }
 }

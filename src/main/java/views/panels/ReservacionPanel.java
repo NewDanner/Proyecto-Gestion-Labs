@@ -8,6 +8,16 @@ package views.panels;
  *
  * @author Andrei
  */
-public class ReservacionPanel {
-    //Para la reservacion
+import javax.swing.*;
+import java.awt.*;
+
+public class ReservacionPanel extends JPanel {
+    public ReservacionPanel() {
+        initComponents();
+    }
+    
+    private void initComponents() {
+        setLayout(new BorderLayout());
+        add(new JLabel("Panel de Reservas - En construcción", SwingConstants.CENTER), BorderLayout.CENTER);
+    }
 }
