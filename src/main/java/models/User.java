@@ -22,20 +22,8 @@ public class User {
         this.role = role;
     }
     
-    // Getters
-    public int getId() {
-        return id;
-    }
-    
-    public String getUsername() {
-        return username;
-    }
-    
-    public String getCi() {
-        return ci;
-    }
-    
-    public String getRole() {
-        return role;
-    }
+    public int getId() { return id; }
+    public String getUsername() { return username; }
+    public String getCi() { return ci; }
+    public String getRole() { return role; }
 }
