@@ -92,6 +92,9 @@ public class RegisterForm extends JFrame {
         if (success) {
             JOptionPane.showMessageDialog(this, "Registro exitoso. Ahora puede iniciar sesión.");
             this.dispose();
+            SwingUtilities.invokeLater(() -> {
+                parent.setVisible(true);
+            });
         } else {
             JOptionPane.showMessageDialog(this, "Error en el registro. El usuario ya existe.", 
                 "Error", JOptionPane.ERROR_MESSAGE);
