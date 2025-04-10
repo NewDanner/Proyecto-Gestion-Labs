@@ -4,6 +4,7 @@ import models.User;
 import javax.swing.*;
 import java.awt.*;
 import java.awt.event.*;
+import models.DatabaseConnection;
 import views.panels.*;
 
 public class MainFrame extends JFrame {
@@ -30,17 +31,14 @@ public class MainFrame extends JFrame {
         setSize(1200, 800);
         setLocationRelativeTo(null);
         
-        // Configurar fuente más grande
         Font largerFont = new Font("Arial", Font.PLAIN, 14);
         UIManager.put("Button.font", largerFont);
         UIManager.put("Label.font", largerFont);
         UIManager.put("TextField.font", largerFont);
         UIManager.put("ComboBox.font", largerFont);
         
-        // Barra de menú superior
         JMenuBar menuBar = new JMenuBar();
         
-        // Menú Opciones
         JMenu menuOpciones = new JMenu("Opciones");
         menuOpciones.setFont(new Font("Arial", Font.BOLD, 14));
         
@@ -48,14 +46,12 @@ public class MainFrame extends JFrame {
         itemSalir.addActionListener(e -> System.exit(0));
         menuOpciones.add(itemSalir);
         
-        // Menú Reportes
         JMenu menuReportes = new JMenu("Reportes");
         menuReportes.setFont(new Font("Arial", Font.BOLD, 14));
         JMenuItem itemReportes = new JMenuItem("Ver Reportes");
         itemReportes.addActionListener(e -> showPanel("reportes"));
         menuReportes.add(itemReportes);
         
-        // Menú Usuario
         JMenu menuUsuario = new JMenu("Usuario");
         menuUsuario.setFont(new Font("Arial", Font.BOLD, 14));
         JMenuItem itemPerfil = new JMenuItem("Mi Perfil");
@@ -71,7 +67,6 @@ public class MainFrame extends JFrame {
         menuBar.add(menuUsuario);
         setJMenuBar(menuBar);
         
-        // Barra de herramientas
         JToolBar toolBar = new JToolBar();
         toolBar.setFloatable(false);
         
@@ -97,15 +92,15 @@ public class MainFrame extends JFrame {
         
         add(toolBar, BorderLayout.NORTH);
         
-        // Panel principal
         cardLayout = new CardLayout();
         mainPanel = new JPanel(cardLayout);
         
+        // Inicializar todos los paneles con el usuario actual
         dashboardPanel = new DashboardPanel(currentUser);
         labsPanel = new LabsPanel();
-        calendarPanel = new CalendarPanel();
-        reservacionPanel = new ReservacionPanel();
-        mantenimientoPanel = new MantenimientoPanel();
+        calendarPanel = new CalendarPanel(currentUser);
+        reservacionPanel = new ReservacionPanel(currentUser);
+        mantenimientoPanel = new MantenimientoPanel(currentUser);
         reportesPanel = new ReportesPanel();
         usuarioPanel = new UsuarioPanel(currentUser, this);
         
@@ -122,7 +117,56 @@ public class MainFrame extends JFrame {
     }
     
     private void showPanel(String panelName) {
+        switch (panelName) {
+            case "dashboard":
+                dashboardPanel = new DashboardPanel(currentUser);
+                break;
+            case "labs":
+                labsPanel = new LabsPanel();
+                break;
+            case "calendar":
+                calendarPanel = new CalendarPanel(currentUser);
+                break;
+            case "reservations":
+                reservacionPanel = new ReservacionPanel(currentUser);
+                break;
+            case "maintenance":
+                mantenimientoPanel = new MantenimientoPanel(currentUser);
+                break;
+            case "usuario":
+                usuarioPanel = new UsuarioPanel(currentUser, this);
+                break;
+        }
+        
         cardLayout.show(mainPanel, panelName);
+    }
+    
+    @Override
+    public void dispose() {
+        // Limpiar listeners correctamente
+        if (dashboardPanel instanceof DatabaseConnection.DatabaseChangeListener) {
+            DatabaseConnection.removeListener((DatabaseConnection.DatabaseChangeListener) dashboardPanel);
+        }
+        if (labsPanel != null) {
+            DatabaseConnection.removeListener(labsPanel);
+        }
+        if (calendarPanel != null) {
+            DatabaseConnection.removeListener(calendarPanel);
+        }
+        if (reservacionPanel != null) {
+            DatabaseConnection.removeListener(reservacionPanel);
+        }
+        if (mantenimientoPanel != null) {
+            DatabaseConnection.removeListener((DatabaseConnection.DatabaseChangeListener) mantenimientoPanel);
+        }
+        if (reportesPanel instanceof DatabaseConnection.DatabaseChangeListener) {
+            DatabaseConnection.removeListener((DatabaseConnection.DatabaseChangeListener) reportesPanel);
+        }
+        if (usuarioPanel instanceof DatabaseConnection.DatabaseChangeListener) {
+            DatabaseConnection.removeListener((DatabaseConnection.DatabaseChangeListener) usuarioPanel);
+        }
+        
+        super.dispose();
     }
     
     private void cerrarSesion(ActionEvent e) {
@@ -133,7 +177,9 @@ public class MainFrame extends JFrame {
         
         if (confirm == JOptionPane.YES_OPTION) {
             this.dispose();
-            new views.LoginForm().setVisible(true);
+            SwingUtilities.invokeLater(() -> {
+                new views.LoginForm().setVisible(true);
+            });
         }
     }
     
