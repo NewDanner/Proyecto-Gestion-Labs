@@ -1,23 +1,488 @@
-/*
- * Click nbfs://nbhost/SystemFileSystem/Templates/Licenses/license-default.txt to change this license
- * Click nbfs://nbhost/SystemFileSystem/Templates/Classes/Class.java to edit this template
- */
 package views.panels;
 
-/**
- *
- * @author Andrei
- */
 import javax.swing.*;
 import java.awt.*;
+import java.sql.*;
+import models.DatabaseConnection;
+import javax.swing.table.*;
+import java.awt.event.*;
+import models.User;
+import java.time.LocalDate;
+import java.time.format.DateTimeFormatter;
 
-public class ReservacionPanel extends JPanel {
-    public ReservacionPanel() {
+public class ReservacionPanel extends JPanel implements DatabaseConnection.DatabaseChangeListener {
+    private JTable prestamosTable;
+    private JButton btnNuevaReserva, btnEditar, btnCancelar, btnCompletar, btnEliminar, btnRefresh;
+    private User currentUser;
+    
+    public ReservacionPanel(User user) {
+        this.currentUser = user;
+        DatabaseConnection.addListener(this);
         initComponents();
+        loadPrestamosData();
     }
     
     private void initComponents() {
         setLayout(new BorderLayout());
-        add(new JLabel("Panel de Reservas - En construcción", SwingConstants.CENTER), BorderLayout.CENTER);
+        
+        prestamosTable = new JTable();
+        prestamosTable.setSelectionMode(ListSelectionModel.SINGLE_SELECTION);
+        JScrollPane scrollPane = new JScrollPane(prestamosTable);
+        add(scrollPane, BorderLayout.CENTER);
+        
+        JPanel buttonPanel = new JPanel(new FlowLayout(FlowLayout.LEFT, 10, 10));
+        
+        btnNuevaReserva = new JButton("Nueva Reserva");
+        btnNuevaReserva.addActionListener(e -> abrirCalendarioParaReserva());
+        buttonPanel.add(btnNuevaReserva);
+        
+        btnEditar = new JButton("Editar");
+        btnEditar.addActionListener(this::editarReserva);
+        buttonPanel.add(btnEditar);
+        
+        btnCancelar = new JButton("Cancelar");
+        btnCancelar.addActionListener(this::cancelarPrestamo);
+        buttonPanel.add(btnCancelar);
+        
+        btnCompletar = new JButton("Completar");
+        btnCompletar.addActionListener(this::completarPrestamo);
+        buttonPanel.add(btnCompletar);
+        
+        btnEliminar = new JButton("Eliminar");
+        btnEliminar.addActionListener(this::eliminarReserva);
+        buttonPanel.add(btnEliminar);
+        
+        btnRefresh = new JButton("Actualizar");
+        btnRefresh.addActionListener(e -> loadPrestamosData());
+        buttonPanel.add(btnRefresh);
+        
+        add(buttonPanel, BorderLayout.SOUTH);
+    }
+    
+    private void editarReserva(ActionEvent evt) {
+        int selectedRow = prestamosTable.getSelectedRow();
+        if (selectedRow == -1) {
+            JOptionPane.showMessageDialog(this, "Por favor seleccione una reserva para editar",
+                "Advertencia", JOptionPane.WARNING_MESSAGE);
+            return;
+        }
+        
+        // Obtener el estado directamente del modelo de la tabla
+        String estado = prestamosTable.getModel().getValueAt(selectedRow, 6).toString().toLowerCase();
+        
+        if (!"pendiente".equals(estado)) {
+            JOptionPane.showMessageDialog(this, "Solo se pueden editar reservas pendientes. Estado actual: " + estado,
+                "Advertencia", JOptionPane.WARNING_MESSAGE);
+            return;
+        }
+        
+        int id = (int) prestamosTable.getValueAt(selectedRow, 0);
+        String laboratorio = (String) prestamosTable.getValueAt(selectedRow, 1);
+        Date fecha = (Date) prestamosTable.getValueAt(selectedRow, 3);
+        Time horaInicio = (Time) prestamosTable.getValueAt(selectedRow, 4);
+        Time horaFin = (Time) prestamosTable.getValueAt(selectedRow, 5);
+        
+        // Crear diálogo de edición mejorado
+        JDialog editDialog = new JDialog((Frame)SwingUtilities.getWindowAncestor(this), "Editar Reserva", true);
+        editDialog.setLayout(new BorderLayout());
+        editDialog.setSize(400, 300);
+        editDialog.setLocationRelativeTo(this);
+        
+        JPanel panel = new JPanel(new GridLayout(0, 2, 10, 10));
+        
+        JLabel lblLaboratorio = new JLabel("Laboratorio:");
+        JTextField txtLaboratorio = new JTextField(laboratorio);
+        txtLaboratorio.setEditable(false);
+        
+        JLabel lblFecha = new JLabel("Fecha (YYYY-MM-DD):");
+        JTextField txtFecha = new JTextField(fecha.toString());
+        
+        JLabel lblHoraInicio = new JLabel("Hora Inicio (HH:MM:SS):");
+        JTextField txtHoraInicio = new JTextField(horaInicio.toString());
+        
+        JLabel lblHoraFin = new JLabel("Hora Fin (HH:MM:SS):");
+        JTextField txtHoraFin = new JTextField(horaFin.toString());
+        
+        JLabel lblMateria = new JLabel("Materia:");
+        String[] materias = {"Electrónica", "Hardware", "Redes y Telecomunicaciones"};
+        JComboBox<String> cbMateria = new JComboBox<>(materias);
+        
+        // Establecer materia actual si existe
+        String materiaActual = getMateriaReserva(id);
+        if(materiaActual != null) {
+            String materiaFormateada = materiaActual.replace("_", " ").replace("telecomunicaciones", "y telecomunicaciones");
+            materiaFormateada = materiaFormateada.substring(0, 1).toUpperCase() + materiaFormateada.substring(1);
+            cbMateria.setSelectedItem(materiaFormateada);
+        }
+        
+        panel.add(lblLaboratorio);
+        panel.add(txtLaboratorio);
+        panel.add(lblFecha);
+        panel.add(txtFecha);
+        panel.add(lblHoraInicio);
+        panel.add(txtHoraInicio);
+        panel.add(lblHoraFin);
+        panel.add(txtHoraFin);
+        panel.add(lblMateria);
+        panel.add(cbMateria);
+        
+        JPanel buttonPanel = new JPanel();
+        JButton btnGuardar = new JButton("Guardar");
+        JButton btnCancelar = new JButton("Cancelar");
+        
+        btnGuardar.addActionListener(e -> {
+            try {
+                // Validar datos
+                LocalDate nuevaFecha = LocalDate.parse(txtFecha.getText());
+                Time nuevaHoraInicio = Time.valueOf(txtHoraInicio.getText());
+                Time nuevaHoraFin = Time.valueOf(txtHoraFin.getText());
+                
+                if (nuevaHoraInicio.after(nuevaHoraFin)) {
+                    JOptionPane.showMessageDialog(editDialog, "La hora de inicio debe ser anterior a la hora de fin",
+                        "Error", JOptionPane.ERROR_MESSAGE);
+                    return;
+                }
+                
+                // Verificar disponibilidad
+                if(!verificarDisponibilidad(id, laboratorio, nuevaFecha, nuevaHoraInicio, nuevaHoraFin)) {
+                    JOptionPane.showMessageDialog(editDialog, "El laboratorio no está disponible en ese horario",
+                        "Error", JOptionPane.ERROR_MESSAGE);
+                    return;
+                }
+                
+                // Mapear materia a formato de base de datos
+                String materia = ((String)cbMateria.getSelectedItem()).toLowerCase()
+                    .replace(" y ", "_").replace("ó", "o");
+                
+                // Actualizar reserva
+                actualizarReserva(id, nuevaFecha, nuevaHoraInicio, nuevaHoraFin, materia);
+                editDialog.dispose();
+                
+            } catch (Exception ex) {
+                JOptionPane.showMessageDialog(editDialog, "Formato de fecha u hora inválido",
+                    "Error", JOptionPane.ERROR_MESSAGE);
+            }
+        });
+        
+        btnCancelar.addActionListener(e -> editDialog.dispose());
+        
+        buttonPanel.add(btnGuardar);
+        buttonPanel.add(btnCancelar);
+        
+        editDialog.add(panel, BorderLayout.CENTER);
+        editDialog.add(buttonPanel, BorderLayout.SOUTH);
+        editDialog.setVisible(true);
+    }
+    
+    private String getMateriaReserva(int idPrestamo) {
+        String query = "SELECT materia FROM Prestamo WHERE Id_Prestamo = ?";
+        
+        try (Connection conn = DatabaseConnection.getConnection();
+             PreparedStatement stmt = conn.prepareStatement(query)) {
+            
+            stmt.setInt(1, idPrestamo);
+            ResultSet rs = stmt.executeQuery();
+            
+            if (rs.next()) {
+                return rs.getString("materia");
+            }
+        } catch (SQLException e) {
+            e.printStackTrace();
+        }
+        return null;
+    }
+    
+    private boolean verificarDisponibilidad(int idPrestamo, String labName, LocalDate fecha, Time horaInicio, Time horaFin) {
+        String query = "SELECT COUNT(*) FROM Prestamo p " +
+                      "JOIN Laboratorios l ON p.Nro_Laboratorio = l.Id_Laboratorio " +
+                      "WHERE l.nombre = ? AND p.fecha_reserva = ? " +
+                      "AND p.Id_Prestamo != ? " +
+                      "AND ((p.hora_inicio BETWEEN ? AND ?) OR " +
+                      "(p.hora_fin BETWEEN ? AND ?) OR " +
+                      "(p.hora_inicio <= ? AND p.hora_fin >= ?)) " +
+                      "AND p.estado != 'cancelado'";
+        
+        try (Connection conn = DatabaseConnection.getConnection();
+             PreparedStatement stmt = conn.prepareStatement(query)) {
+            
+            stmt.setString(1, labName);
+            stmt.setDate(2, Date.valueOf(fecha));
+            stmt.setInt(3, idPrestamo);
+            stmt.setTime(4, horaInicio);
+            stmt.setTime(5, horaFin);
+            stmt.setTime(6, horaInicio);
+            stmt.setTime(7, horaFin);
+            stmt.setTime(8, horaInicio);
+            stmt.setTime(9, horaFin);
+            
+            ResultSet rs = stmt.executeQuery();
+            if (rs.next()) {
+                return rs.getInt(1) == 0;
+            }
+        } catch (SQLException e) {
+            e.printStackTrace();
+        }
+        return false;
+    }
+    
+    private void actualizarReserva(int id, LocalDate fecha, Time horaInicio, Time horaFin, String materia) {
+        String query = "UPDATE Prestamo SET fecha_reserva = ?, hora_inicio = ?, hora_fin = ?, materia = ? WHERE Id_Prestamo = ?";
+        
+        try (Connection conn = DatabaseConnection.getConnection();
+             PreparedStatement stmt = conn.prepareStatement(query)) {
+            
+            stmt.setDate(1, Date.valueOf(fecha));
+            stmt.setTime(2, horaInicio);
+            stmt.setTime(3, horaFin);
+            stmt.setString(4, materia);
+            stmt.setInt(5, id);
+            
+            int rowsAffected = stmt.executeUpdate();
+            
+            if (rowsAffected > 0) {
+                JOptionPane.showMessageDialog(this, "Reserva actualizada exitosamente");
+                DatabaseConnection.notifyDatabaseChanged("Prestamo");
+            } else {
+                JOptionPane.showMessageDialog(this, "No se pudo actualizar la reserva",
+                    "Error", JOptionPane.ERROR_MESSAGE);
+            }
+        } catch (SQLException e) {
+            JOptionPane.showMessageDialog(this, "Error al actualizar reserva: " + e.getMessage(),
+                "Error", JOptionPane.ERROR_MESSAGE);
+            e.printStackTrace();
+        }
+    }
+    
+    private void abrirCalendarioParaReserva() {
+        Window window = SwingUtilities.getWindowAncestor(this);
+        if (window != null) {
+            window.dispose();
+        }
+        SwingUtilities.invokeLater(() -> {
+            CalendarPanel calendarPanel = new CalendarPanel(currentUser);
+            JFrame frame = new JFrame("Calendario de Reservas");
+            frame.setContentPane(calendarPanel);
+            frame.setDefaultCloseOperation(JFrame.EXIT_ON_CLOSE);
+            frame.pack();
+            frame.setSize(1200, 800);
+            frame.setLocationRelativeTo(null);
+            frame.setVisible(true);
+        });
+    }
+    
+    private void loadPrestamosData() {
+        new SwingWorker<Void, Void>() {
+            @Override
+            protected Void doInBackground() throws Exception {
+                String query = "SELECT p.Id_Prestamo, l.nombre AS laboratorio, " +
+                             "p.tipo_de_prestamo, p.fecha_reserva, " +
+                             "p.hora_inicio, p.hora_fin, p.estado, " +
+                             "u.username AS usuario " +
+                             "FROM Prestamo p " +
+                             "JOIN Laboratorios l ON p.Nro_Laboratorio = l.Id_Laboratorio " +
+                             "JOIN Usuarios u ON p.id_usuario = u.id_usuario " +
+                             "ORDER BY p.fecha_reserva DESC, p.hora_inicio DESC";
+                
+                try (Connection conn = DatabaseConnection.getConnection();
+                     Statement stmt = conn.createStatement();
+                     ResultSet rs = stmt.executeQuery(query)) {
+                    
+                    DefaultTableModel model = new DefaultTableModel() {
+                        @Override
+                        public boolean isCellEditable(int row, int column) {
+                            return false;
+                        }
+                    };
+                    
+                    model.addColumn("ID");
+                    model.addColumn("Laboratorio");
+                    model.addColumn("Tipo");
+                    model.addColumn("Fecha");
+                    model.addColumn("Hora Inicio");
+                    model.addColumn("Hora Fin");
+                    model.addColumn("Estado");
+                    model.addColumn("Usuario");
+                    
+                    while (rs.next()) {
+                        model.addRow(new Object[]{
+                            rs.getInt("Id_Prestamo"),
+                            rs.getString("laboratorio"),
+                            formatTipoPrestamo(rs.getString("tipo_de_prestamo")),
+                            rs.getDate("fecha_reserva"),
+                            rs.getTime("hora_inicio"),
+                            rs.getTime("hora_fin"),
+                            formatEstado(rs.getString("estado")),
+                            rs.getString("usuario")
+                        });
+                    }
+                    
+                    SwingUtilities.invokeLater(() -> prestamosTable.setModel(model));
+                }
+                return null;
+            }
+        }.execute();
+    }
+    
+    private String formatTipoPrestamo(String tipo) {
+        return tipo.substring(0, 1).toUpperCase() + tipo.substring(1).toLowerCase();
+    }
+    
+    private String formatEstado(String estado) {
+        return estado.substring(0, 1).toUpperCase() + estado.substring(1).toLowerCase();
+    }
+    
+    private void eliminarReserva(ActionEvent evt) {
+        int selectedRow = prestamosTable.getSelectedRow();
+        if (selectedRow == -1) {
+            JOptionPane.showMessageDialog(this, "Por favor seleccione una reserva para eliminar",
+                "Advertencia", JOptionPane.WARNING_MESSAGE);
+            return;
+        }
+        
+        int id = (int) prestamosTable.getValueAt(selectedRow, 0);
+        String laboratorio = (String) prestamosTable.getValueAt(selectedRow, 1);
+        String fecha = prestamosTable.getValueAt(selectedRow, 3).toString();
+        String hora = prestamosTable.getValueAt(selectedRow, 4).toString();
+        
+        int confirm = JOptionPane.showConfirmDialog(this,
+            "<html><b>¿Eliminar esta reserva?</b><br><br>" +
+            "<b>Laboratorio:</b> " + laboratorio + "<br>" +
+            "<b>Fecha:</b> " + fecha + "<br>" +
+            "<b>Hora:</b> " + hora + "</html>",
+            "Confirmar Eliminación", JOptionPane.YES_NO_OPTION);
+        
+        if (confirm == JOptionPane.YES_OPTION) {
+            eliminarPrestamo(id);
+        }
+    }
+    
+    private void eliminarPrestamo(int id) {
+        String checkDependientes = "SELECT COUNT(*) FROM Registro_cliente WHERE Nro_Prestamo = ?";
+        String deleteQuery = "DELETE FROM Prestamo WHERE Id_Prestamo = ?";
+        
+        try (Connection conn = DatabaseConnection.getConnection()) {
+            conn.setAutoCommit(false);
+            
+            try {
+                // Verificar registros dependientes
+                try (PreparedStatement stmtCheck = conn.prepareStatement(checkDependientes)) {
+                    stmtCheck.setInt(1, id);
+                    ResultSet rs = stmtCheck.executeQuery();
+                    if (rs.next() && rs.getInt(1) > 0) {
+                        int confirm = JOptionPane.showConfirmDialog(this,
+                            "Este préstamo tiene registros de clientes asociados. ¿Desea eliminarlos también?",
+                            "Confirmar Eliminación", JOptionPane.YES_NO_OPTION);
+                        
+                        if (confirm == JOptionPane.YES_OPTION) {
+                            String deleteDependientes = "DELETE FROM Registro_cliente WHERE Nro_Prestamo = ?";
+                            try (PreparedStatement stmtDelDep = conn.prepareStatement(deleteDependientes)) {
+                                stmtDelDep.setInt(1, id);
+                                stmtDelDep.executeUpdate();
+                            }
+                        } else {
+                            conn.rollback();
+                            JOptionPane.showMessageDialog(this, 
+                                "No se puede eliminar el préstamo porque tiene registros asociados",
+                                "Error", JOptionPane.ERROR_MESSAGE);
+                            return;
+                        }
+                    }
+                }
+                
+                // Eliminar el préstamo
+                try (PreparedStatement stmt = conn.prepareStatement(deleteQuery)) {
+                    stmt.setInt(1, id);
+                    int rowsAffected = stmt.executeUpdate();
+                    
+                    if (rowsAffected > 0) {
+                        conn.commit();
+                        JOptionPane.showMessageDialog(this, "Reserva eliminada exitosamente");
+                        DatabaseConnection.notifyDatabaseChanged("Prestamo");
+                        DatabaseConnection.resetAutoIncrement("Prestamo");
+                    } else {
+                        conn.rollback();
+                        JOptionPane.showMessageDialog(this, "No se encontró la reserva a eliminar",
+                            "Error", JOptionPane.ERROR_MESSAGE);
+                    }
+                }
+            } catch (SQLException e) {
+                conn.rollback();
+                JOptionPane.showMessageDialog(this, 
+                    "Error al eliminar reserva: " + e.getMessage(),
+                    "Error", JOptionPane.ERROR_MESSAGE);
+                e.printStackTrace();
+            } finally {
+                conn.setAutoCommit(true);
+            }
+        } catch (SQLException e) {
+            JOptionPane.showMessageDialog(this, 
+                "Error de conexión a la base de datos: " + e.getMessage(),
+                "Error", JOptionPane.ERROR_MESSAGE);
+            e.printStackTrace();
+        }
+    }
+    
+    private void cancelarPrestamo(ActionEvent evt) {
+        cambiarEstadoPrestamo("cancelado");
+    }
+    
+    private void completarPrestamo(ActionEvent evt) {
+        cambiarEstadoPrestamo("completado");
+    }
+    
+    private void cambiarEstadoPrestamo(String nuevoEstado) {
+        int selectedRow = prestamosTable.getSelectedRow();
+        if (selectedRow == -1) {
+            JOptionPane.showMessageDialog(this, "Por favor seleccione un préstamo",
+                "Advertencia", JOptionPane.WARNING_MESSAGE);
+            return;
+        }
+        
+        int id = (int) prestamosTable.getValueAt(selectedRow, 0);
+        String estadoActual = (String) prestamosTable.getValueAt(selectedRow, 6);
+        
+        if (estadoActual.equalsIgnoreCase(nuevoEstado)) {
+            JOptionPane.showMessageDialog(this, "El préstamo ya está en estado " + nuevoEstado,
+                "Advertencia", JOptionPane.WARNING_MESSAGE);
+            return;
+        }
+        
+        String mensaje = String.format("¿Está seguro que desea cambiar el estado del préstamo #%d a %s?", 
+                                      id, nuevoEstado);
+        
+        int confirm = JOptionPane.showConfirmDialog(this, mensaje,
+            "Confirmar Cambio de Estado", JOptionPane.YES_NO_OPTION);
+        
+        if (confirm == JOptionPane.YES_OPTION) {
+            actualizarEstadoPrestamo(id, nuevoEstado);
+        }
+    }
+    
+    private void actualizarEstadoPrestamo(int id, String nuevoEstado) {
+        String query = "UPDATE Prestamo SET estado = ? WHERE Id_Prestamo = ?";
+        
+        try (Connection conn = DatabaseConnection.getConnection();
+             PreparedStatement stmt = conn.prepareStatement(query)) {
+            
+            stmt.setString(1, nuevoEstado);
+            stmt.setInt(2, id);
+            
+            int rowsAffected = stmt.executeUpdate();
+            
+            if (rowsAffected > 0) {
+                JOptionPane.showMessageDialog(this, "Estado del préstamo actualizado exitosamente");
+                DatabaseConnection.notifyDatabaseChanged("Prestamo");
+            }
+        } catch (SQLException e) {
+            JOptionPane.showMessageDialog(this, "Error al actualizar préstamo: " + e.getMessage(),
+                "Error", JOptionPane.ERROR_MESSAGE);
+        }
+    }
+    
+    @Override
+    public void onDatabaseChanged(String tableChanged) {
+        if (tableChanged.equals("Prestamo")) {
+            loadPrestamosData();
+        }
     }
 }
