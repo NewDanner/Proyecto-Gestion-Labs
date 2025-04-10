@@ -1,13 +1,13 @@
 /*
  * Click nbfs://nbhost/SystemFileSystem/Templates/Licenses/license-default.txt to change this license
  * Click nbfs://nbhost/SystemFileSystem/Templates/Classes/Class.java to edit this template
- */
-package views;
 
 /**
  *
  * @author Andrei
  */
+package views;
+
 import controllers.AuthController;
 import models.User;
 import javax.swing.*;
@@ -32,7 +32,6 @@ public class LoginForm extends JFrame {
         setSize(400, 300);
         setLocationRelativeTo(null);
         
-        // Configurar fuente más grande
         Font largerFont = new Font("Arial", Font.PLAIN, 14);
         
         JPanel panel = new JPanel(new GridBagLayout());
@@ -91,8 +90,10 @@ public class LoginForm extends JFrame {
         
         if (user != null) {
             JOptionPane.showMessageDialog(this, "Bienvenido " + user.getUsername());
-            new MainFrame(user).setVisible(true);
             this.dispose();
+            SwingUtilities.invokeLater(() -> {
+                new MainFrame(user).setVisible(true);
+            });
         } else {
             JOptionPane.showMessageDialog(this, "Usuario o contraseña incorrectos", 
                 "Error", JOptionPane.ERROR_MESSAGE);
