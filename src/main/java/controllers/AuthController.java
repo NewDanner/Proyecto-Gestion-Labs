@@ -2,12 +2,11 @@
  * Click nbfs://nbhost/SystemFileSystem/Templates/Licenses/license-default.txt to change this license
  * Click nbfs://nbhost/SystemFileSystem/Templates/Classes/Class.java to edit this template
  */
-package controllers;
-
 /**
  *
  * @author Andrei
  */
+package controllers;
 
 import models.User;
 import models.DatabaseConnection;
@@ -50,7 +49,11 @@ public class AuthController {
             stmt.setString(3, ci);
             stmt.setString(4, role);
             
-            return stmt.executeUpdate() > 0;
+            boolean success = stmt.executeUpdate() > 0;
+            if (success) {
+                DatabaseConnection.notifyDatabaseChanged("Usuarios");
+            }
+            return success;
         } catch (SQLException e) {
             e.printStackTrace();
             return false;
@@ -68,7 +71,11 @@ public class AuthController {
             stmt.setString(3, ci);
             stmt.setInt(4, userId);
             
-            return stmt.executeUpdate() > 0;
+            boolean success = stmt.executeUpdate() > 0;
+            if (success) {
+                DatabaseConnection.notifyDatabaseChanged("Usuarios");
+            }
+            return success;
         } catch (SQLException e) {
             e.printStackTrace();
             return false;
@@ -85,7 +92,11 @@ public class AuthController {
             stmt.setString(2, ci);
             stmt.setInt(3, userId);
             
-            return stmt.executeUpdate() > 0;
+            boolean success = stmt.executeUpdate() > 0;
+            if (success) {
+                DatabaseConnection.notifyDatabaseChanged("Usuarios");
+            }
+            return success;
         } catch (SQLException e) {
             e.printStackTrace();
             return false;
@@ -113,5 +124,34 @@ public class AuthController {
             e.printStackTrace();
         }
         return null;
+    }
+    
+    public boolean deleteUser(int userId) {
+        String query = "DELETE FROM Usuarios WHERE id_usuario = ?";
+        
+        try (Connection conn = DatabaseConnection.getConnection()) {
+            conn.setAutoCommit(false);
+            
+            try (PreparedStatement stmt = conn.prepareStatement(query)) {
+                stmt.setInt(1, userId);
+                int rowsAffected = stmt.executeUpdate();
+                
+                if (rowsAffected > 0) {
+                    DatabaseConnection.resetAutoIncrement("Usuarios");
+                    conn.commit();
+                    return true;
+                }
+                conn.rollback();
+                return false;
+            } catch (SQLException e) {
+                conn.rollback();
+                throw e;
+            } finally {
+                conn.setAutoCommit(true);
+            }
+        } catch (SQLException e) {
+            e.printStackTrace();
+            return false;
+        }
     }
 }
