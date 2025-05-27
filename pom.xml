@@ -83,6 +83,17 @@
             <artifactId>jcommon</artifactId>
             <version>1.0.24</version>
         </dependency>
+        <dependency>
+            <groupId>org.apache.pdfbox</groupId>
+            <artifactId>pdfbox</artifactId>
+            <version>2.0.27</version>
+        </dependency>
+        <dependency>
+            <groupId>com.github.pcorless.icepdf</groupId>
+            <artifactId>icepdf-viewer</artifactId>
+            <version>7.2.4_P01</version>
+            <type>jar</type>
+        </dependency>
     </dependencies>
 
     <build>

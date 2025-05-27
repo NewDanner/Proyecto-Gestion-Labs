@@ -40,7 +40,7 @@ CREATE TABLE Laboratorios (
     estado ENUM('Disponible', 'En Mantenimiento', 'Fuera de Servicio') DEFAULT 'Disponible' NOT NULL
 ) AUTO_INCREMENT = 1;
 
--- Tabla Equipos
+-- Crear la tabla Equipos sin el campo id_usuario
 CREATE TABLE Equipos (
     Id_Equipo INT AUTO_INCREMENT PRIMARY KEY,
     Marca VARCHAR(50),
@@ -223,6 +223,24 @@ CREATE TABLE ConfiguracionReportes (
     FOREIGN KEY (id_usuario) REFERENCES Usuarios(id_usuario)
 );
 
+
+-- Tabla para registrar todas las transacciones importantes
+CREATE TABLE Historial_Transacciones (
+    id_transaccion INT AUTO_INCREMENT PRIMARY KEY,
+    tabla_afectada VARCHAR(50) NOT NULL,
+    id_registro_afectado INT NULL,
+    tipo_operacion ENUM('INSERT', 'UPDATE', 'DELETE') NOT NULL,
+    datos_anteriores TEXT NULL,
+    datos_nuevos TEXT NULL,
+    fecha_transaccion TIMESTAMP DEFAULT CURRENT_TIMESTAMP,
+    id_usuario INT NOT NULL,
+    descripcion VARCHAR(255) NULL,
+    tipo_historial ENUM('USUARIO', 'EQUIPO', 'MATERIAL', 'RESERVA', 'MANTENIMIENTO', 'BAJA') NOT NULL,
+    ip_conexion VARCHAR(45) NULL,
+    dispositivo VARCHAR(100) NULL,
+    FOREIGN KEY (id_usuario) REFERENCES Usuarios(id_usuario)
+) AUTO_INCREMENT = 1;
+
 -- Procedimiento almacenado para reiniciar IDs después de eliminar
 DELIMITER //
 CREATE PROCEDURE ReiniciarIDs(IN tabla_nombre VARCHAR(50))
@@ -297,6 +315,298 @@ SELECT * FROM Reporte_Mantenimiento;
 SELECT * FROM Reporte_Dispositivos_Baja;
 
 USE GESTOR;
+-- TRIGGERS
+-- Trigger para INSERT en Usuarios
+DELIMITER //
+CREATE TRIGGER trg_usuarios_insert AFTER INSERT ON Usuarios
+FOR EACH ROW
+BEGIN
+    INSERT INTO Historial_Transacciones (
+        tabla_afectada, id_registro_afectado, tipo_operacion,
+        datos_nuevos, id_usuario, descripcion, tipo_historial
+    ) VALUES (
+        'Usuarios', NEW.id_usuario, 'INSERT',
+        CONCAT('Nombre: ', NEW.nombre, ' | Username: ', NEW.username, 
+               ' | Rol: ', NEW.rol, ' | Estado: ', NEW.estado),
+        NEW.id_usuario, 'Nuevo usuario creado', 'USUARIO'
+    );
+END //
+DELIMITER ;
+
+-- Trigger para UPDATE en Usuarios
+DELIMITER //
+CREATE TRIGGER trg_usuarios_update AFTER UPDATE ON Usuarios
+FOR EACH ROW
+BEGIN
+    INSERT INTO Historial_Transacciones (
+        tabla_afectada, id_registro_afectado, tipo_operacion,
+        datos_anteriores, datos_nuevos, id_usuario, descripcion, tipo_historial
+    ) VALUES (
+        'Usuarios', NEW.id_usuario, 'UPDATE',
+        CONCAT('Nombre: ', OLD.nombre, ' | Username: ', OLD.username, 
+               ' | Rol: ', OLD.rol, ' | Estado: ', OLD.estado),
+        CONCAT('Nombre: ', NEW.nombre, ' | Username: ', NEW.username, 
+               ' | Rol: ', NEW.rol, ' | Estado: ', NEW.estado),
+        NEW.id_usuario, 'Actualización de usuario', 'USUARIO'
+    );
+END //
+DELIMITER ;
+
+-- Trigger para DELETE en Usuarios
+DELIMITER //
+CREATE TRIGGER trg_usuarios_delete AFTER DELETE ON Usuarios
+FOR EACH ROW
+BEGIN
+    INSERT INTO Historial_Transacciones (
+        tabla_afectada, id_registro_afectado, tipo_operacion,
+        datos_anteriores, id_usuario, descripcion, tipo_historial
+    ) VALUES (
+        'Usuarios', OLD.id_usuario, 'DELETE',
+        CONCAT('Nombre: ', OLD.nombre, ' | Username: ', OLD.username, 
+               ' | Rol: ', OLD.rol, ' | Estado: ', OLD.estado),
+        OLD.id_usuario, 'Usuario eliminado', 'USUARIO'
+    );
+END //
+DELIMITER ;
+
+DELIMITER //
+CREATE TRIGGER trg_equipos_insert AFTER INSERT ON Equipos
+FOR EACH ROW
+BEGIN
+    INSERT INTO Historial_Transacciones (
+        tabla_afectada, id_registro_afectado, tipo_operacion,
+        datos_nuevos, id_usuario, descripcion, tipo_historial
+    ) VALUES (
+        'Equipos', NEW.Id_Equipo, 'INSERT',
+        CONCAT('Marca: ', NEW.Marca, ' | Modelo: ', NEW.Modelo, 
+               ' | Estado: ', NEW.Estado, ' | Lab: ', NEW.Id_Laboratorio),
+        1, -- Usuario por defecto (admin)
+        'Nuevo equipo registrado', 'EQUIPO'
+    );
+END //
+DELIMITER ;
+
+DELIMITER //
+CREATE TRIGGER trg_equipos_update AFTER UPDATE ON Equipos
+FOR EACH ROW
+BEGIN
+    INSERT INTO Historial_Transacciones (
+        tabla_afectada, id_registro_afectado, tipo_operacion,
+        datos_anteriores, datos_nuevos, id_usuario, descripcion, tipo_historial
+    ) VALUES (
+        'Equipos', NEW.Id_Equipo, 'UPDATE',
+        CONCAT('Marca: ', OLD.Marca, ' | Modelo: ', OLD.Modelo, 
+               ' | Estado: ', OLD.Estado, ' | Lab: ', OLD.Id_Laboratorio),
+        CONCAT('Marca: ', NEW.Marca, ' | Modelo: ', NEW.Modelo, 
+               ' | Estado: ', NEW.Estado, ' | Lab: ', NEW.Id_Laboratorio),
+        1, -- Usuario por defecto (admin)
+        'Actualización de equipo', 'EQUIPO'
+    );
+END //
+DELIMITER ;
+
+DELIMITER //
+CREATE TRIGGER trg_equipos_delete AFTER DELETE ON Equipos
+FOR EACH ROW
+BEGIN
+    INSERT INTO Historial_Transacciones (
+        tabla_afectada, id_registro_afectado, tipo_operacion,
+        datos_anteriores, id_usuario, descripcion, tipo_historial
+    ) VALUES (
+        'Equipos', OLD.Id_Equipo, 'DELETE',
+        CONCAT('Marca: ', OLD.Marca, ' | Modelo: ', OLD.Modelo, 
+               ' | Estado: ', OLD.Estado, ' | Lab: ', OLD.Id_Laboratorio),
+        1, -- Usuario por defecto (admin)
+        'Equipo eliminado', 'EQUIPO'
+    );
+END //
+DELIMITER ;
+
+-- Triggers para Material_Adicional (INSERT, UPDATE, DELETE)
+DELIMITER //
+CREATE TRIGGER trg_material_insert AFTER INSERT ON Material_Adicional
+FOR EACH ROW
+BEGIN
+    INSERT INTO Historial_Transacciones (
+        tabla_afectada, id_registro_afectado, tipo_operacion,
+        datos_nuevos, id_usuario, descripcion, tipo_historial
+    ) VALUES (
+        'Material_Adicional', NEW.N_Objeto, 'INSERT',
+        CONCAT('Nombre: ', NEW.nombre_objeto, ' | Cantidad: ', NEW.cantidad, 
+               ' | Lab: ', NEW.Id_Laboratorio),
+        NEW.reportado_por, 'Nuevo material registrado', 'MATERIAL'
+    );
+END //
+DELIMITER ;
+
+DELIMITER //
+CREATE TRIGGER trg_material_update AFTER UPDATE ON Material_Adicional
+FOR EACH ROW
+BEGIN
+    INSERT INTO Historial_Transacciones (
+        tabla_afectada, id_registro_afectado, tipo_operacion,
+        datos_anteriores, datos_nuevos, id_usuario, descripcion, tipo_historial
+    ) VALUES (
+        'Material_Adicional', NEW.N_Objeto, 'UPDATE',
+        CONCAT('Nombre: ', OLD.nombre_objeto, ' | Cantidad: ', OLD.cantidad, 
+               ' | Lab: ', OLD.Id_Laboratorio),
+        CONCAT('Nombre: ', NEW.nombre_objeto, ' | Cantidad: ', NEW.cantidad, 
+               ' | Lab: ', NEW.Id_Laboratorio),
+        NEW.reportado_por, 'Actualización de material', 'MATERIAL'
+    );
+END //
+DELIMITER ;
+
+DELIMITER //
+CREATE TRIGGER trg_material_delete AFTER DELETE ON Material_Adicional
+FOR EACH ROW
+BEGIN
+    INSERT INTO Historial_Transacciones (
+        tabla_afectada, id_registro_afectado, tipo_operacion,
+        datos_anteriores, id_usuario, descripcion, tipo_historial
+    ) VALUES (
+        'Material_Adicional', OLD.N_Objeto, 'DELETE',
+        CONCAT('Nombre: ', OLD.nombre_objeto, ' | Cantidad: ', OLD.cantidad, 
+               ' | Lab: ', OLD.Id_Laboratorio),
+        OLD.reportado_por, 'Material eliminado', 'MATERIAL'
+    );
+END //
+DELIMITER ;
+
+-- Triggers para Reservas (INSERT, UPDATE, DELETE)
+DELIMITER //
+CREATE TRIGGER trg_reservas_insert AFTER INSERT ON Reservas
+FOR EACH ROW
+BEGIN
+    INSERT INTO Historial_Transacciones (
+        tabla_afectada, id_registro_afectado, tipo_operacion,
+        datos_nuevos, id_usuario, descripcion, tipo_historial
+    ) VALUES (
+        'Reservas', NEW.Id_Reserva, 'INSERT',
+        CONCAT('Lab: ', NEW.Nro_Laboratorio, ' | Tipo: ', NEW.tipo_de_prestamo, 
+               ' | Fecha: ', NEW.fecha_reserva, ' | Estado: ', NEW.estado),
+        NEW.id_usuario, 'Nueva reserva creada', 'RESERVA'
+    );
+END //
+DELIMITER ;
+
+DELIMITER //
+CREATE TRIGGER trg_reservas_update AFTER UPDATE ON Reservas
+FOR EACH ROW
+BEGIN
+    INSERT INTO Historial_Transacciones (
+        tabla_afectada, id_registro_afectado, tipo_operacion,
+        datos_anteriores, datos_nuevos, id_usuario, descripcion, tipo_historial
+    ) VALUES (
+        'Reservas', NEW.Id_Reserva, 'UPDATE',
+        CONCAT('Lab: ', OLD.Nro_Laboratorio, ' | Tipo: ', OLD.tipo_de_prestamo, 
+               ' | Fecha: ', OLD.fecha_reserva, ' | Estado: ', OLD.estado),
+        CONCAT('Lab: ', NEW.Nro_Laboratorio, ' | Tipo: ', NEW.tipo_de_prestamo, 
+               ' | Fecha: ', NEW.fecha_reserva, ' | Estado: ', NEW.estado),
+        NEW.id_usuario, 'Actualización de reserva', 'RESERVA'
+    );
+END //
+DELIMITER ;
+
+DELIMITER //
+CREATE TRIGGER trg_reservas_delete AFTER DELETE ON Reservas
+FOR EACH ROW
+BEGIN
+    INSERT INTO Historial_Transacciones (
+        tabla_afectada, id_registro_afectado, tipo_operacion,
+        datos_anteriores, id_usuario, descripcion, tipo_historial
+    ) VALUES (
+        'Reservas', OLD.Id_Reserva, 'DELETE',
+        CONCAT('Lab: ', OLD.Nro_Laboratorio, ' | Tipo: ', OLD.tipo_de_prestamo, 
+               ' | Fecha: ', OLD.fecha_reserva, ' | Estado: ', OLD.estado),
+        OLD.id_usuario, 'Reserva eliminada', 'RESERVA'
+    );
+END //
+DELIMITER ;
+
+-- Triggers para Mantenimiento (INSERT, UPDATE, DELETE)
+DELIMITER //
+CREATE TRIGGER trg_mantenimiento_insert AFTER INSERT ON Mantenimiento
+FOR EACH ROW
+BEGIN
+    INSERT INTO Historial_Transacciones (
+        tabla_afectada, id_registro_afectado, tipo_operacion,
+        datos_nuevos, id_usuario, descripcion, tipo_historial
+    ) VALUES (
+        'Mantenimiento', NEW.Id_Mantenimiento, 'INSERT',
+        CONCAT('Tipo: ', NEW.tipo, ' | Estado: ', NEW.estado, 
+               ' | F.Ini: ', NEW.fecha_inicio, ' | F.Fin: ', IFNULL(NEW.fecha_fin, 'NULL')),
+        NEW.Id_Usuario_Responsable, 'Nuevo mantenimiento registrado', 'MANTENIMIENTO'
+    );
+END //
+DELIMITER ;
+
+DELIMITER //
+CREATE TRIGGER trg_mantenimiento_update AFTER UPDATE ON Mantenimiento
+FOR EACH ROW
+BEGIN
+    INSERT INTO Historial_Transacciones (
+        tabla_afectada, id_registro_afectado, tipo_operacion,
+        datos_anteriores, datos_nuevos, id_usuario, descripcion, tipo_historial
+    ) VALUES (
+        'Mantenimiento', NEW.Id_Mantenimiento, 'UPDATE',
+        CONCAT('Tipo: ', OLD.tipo, ' | Estado: ', OLD.estado, 
+               ' | F.Ini: ', OLD.fecha_inicio, ' | F.Fin: ', IFNULL(OLD.fecha_fin, 'NULL')),
+        CONCAT('Tipo: ', NEW.tipo, ' | Estado: ', NEW.estado, 
+               ' | F.Ini: ', NEW.fecha_inicio, ' | F.Fin: ', IFNULL(NEW.fecha_fin, 'NULL')),
+        NEW.Id_Usuario_Responsable, 'Actualización de mantenimiento', 'MANTENIMIENTO'
+    );
+END //
+DELIMITER ;
+
+DELIMITER //
+CREATE TRIGGER trg_mantenimiento_delete AFTER DELETE ON Mantenimiento
+FOR EACH ROW
+BEGIN
+    INSERT INTO Historial_Transacciones (
+        tabla_afectada, id_registro_afectado, tipo_operacion,
+        datos_anteriores, id_usuario, descripcion, tipo_historial
+    ) VALUES (
+        'Mantenimiento', OLD.Id_Mantenimiento, 'DELETE',
+        CONCAT('Tipo: ', OLD.tipo, ' | Estado: ', OLD.estado, 
+               ' | F.Ini: ', OLD.fecha_inicio, ' | F.Fin: ', IFNULL(OLD.fecha_fin, 'NULL')),
+        OLD.Id_Usuario_Responsable, 'Mantenimiento eliminado', 'MANTENIMIENTO'
+    );
+END //
+DELIMITER ;
+
+-- Trigger para Dispositivos_Baja
+DELIMITER //
+CREATE TRIGGER trg_bajas_audit AFTER INSERT ON Dispositivos_Baja
+FOR EACH ROW
+BEGIN
+    DECLARE descripcion_elemento VARCHAR(100);
+    DECLARE id_usuario_reporta INT;
+    
+    IF NEW.Id_Equipo IS NOT NULL THEN
+        SELECT CONCAT(Marca, ' ', Modelo), Id_Laboratorio INTO descripcion_elemento, id_usuario_reporta 
+        FROM Equipos WHERE Id_Equipo = NEW.Id_Equipo;
+    ELSE
+        SELECT nombre_objeto, reportado_por INTO descripcion_elemento, id_usuario_reporta
+        FROM Material_Adicional WHERE N_Objeto = NEW.N_Objeto;
+    END IF;
+    
+    INSERT INTO Historial_Transacciones (
+        tabla_afectada, id_registro_afectado, tipo_operacion,
+        datos_nuevos, id_usuario, descripcion, tipo_historial
+    ) VALUES (
+        'Dispositivos_Baja', NEW.Id_Baja, 'INSERT',
+        CONCAT('Elemento: ', descripcion_elemento, ' | Motivo: ', NEW.motivo),
+        NEW.autorizado_por, 'Registro de baja de dispositivo', 'BAJA'
+    );
+END //
+DELIMITER ;
+
+
+
+
+
+USE GESTOR;
 -- Usuario Administrador
 INSERT INTO Usuarios (nombre, segundo_nombre, primer_apellido, segundo_apellido, turno, username, password, ci, rol, sexo, estado)
 VALUES ('Admin', NULL, 'Principal', NULL, 'Mañana', 'admin', 'admin', 11111111, 'Administrador(a)', 'Hombre', TRUE);
@@ -324,36 +634,166 @@ INSERT INTO Laboratorios (nombre, capacidad, descripcion, estado) VALUES
 ('Laboratorio 6', 28, 'Laboratorio de programación y desarrollo', 'Disponible'),
 ('Laboratorio 7', 30, 'Laboratorio de seguridad informática', 'Disponible');
 
--- Equipos para el Laboratorio 1
-INSERT INTO Equipos (Marca, Modelo, Procesador, RAM, Almacenamiento, SO, Estado, Id_Laboratorio) VALUES
-('HP', 'ProDesk 400', 'Intel Core i5-10400', '16GB', '512GB SSD', 'Windows 10 Pro', 'Operativo', 1),
-('Dell', 'OptiPlex 3080', 'Intel Core i5-10500', '8GB', '1TB HDD', 'Windows 10 Pro', 'Operativo', 1),
-('Lenovo', 'ThinkCentre M70t', 'Intel Core i7-10700', '16GB', '256GB SSD', 'Windows 11 Pro', 'Operativo', 1);
+USE GESTOR;
+-- Equipos para el Laboratorio 1 (Electrónica)
+INSERT INTO Equipos (Marca, Modelo, numero_de_serie, Procesador, RAM, Almacenamiento, SO, Estado, Id_Laboratorio) 
+VALUES 
+    ('HP', 'ProDesk 400 G7', 'ABC123456', 'Intel Core i5-11400', '16GB DDR4', '512GB SSD', 'Windows 11 Pro', 'Operativo', 1),
+    ('Lenovo', 'ThinkCentre M80q', 'XYZ789012', 'Intel Core i7-11700', '32GB DDR4', '1TB SSD', 'Windows 11 Pro', 'Operativo', 1),
+    ('Dell', 'OptiPlex 7090', 'DEF456789', 'Intel Core i5-11500', '16GB DDR4', '1TB HDD', 'Windows 11 Pro', 'Operativo', 1),
+    ('HP', 'EliteDesk 800 G8', 'GHI234567', 'Intel Core i7-11700', '32GB DDR4', '512GB SSD', 'Windows 11 Pro', 'Operativo', 1),
+    ('Lenovo', 'ThinkCentre M90q', 'JKL890123', 'Intel Core i5-11500', '16GB DDR4', '512GB SSD', 'Windows 11 Pro', 'Operativo', 1),
+    ('Dell', 'OptiPlex 7090', 'MNO345678', 'Intel Core i7-11700', '32GB DDR4', '1TB SSD', 'Windows 11 Pro', 'Operativo', 1),
+    ('HP', 'ProDesk 400 G7', 'PQR567890', 'Intel Core i5-11400', '16GB DDR4', '1TB HDD', 'Windows 11 Pro', 'Operativo', 1),
+    ('Lenovo', 'ThinkCentre M80q', 'STU123456', 'Intel Core i7-11700', '32GB DDR4', '512GB SSD', 'Windows 11 Pro', 'Operativo', 1),
+    ('Dell', 'OptiPlex 7090', 'VWX234567', 'Intel Core i5-11500', '16GB DDR4', '512GB SSD', 'Windows 11 Pro', 'Operativo', 1),
+    ('HP', 'EliteDesk 800 G8', 'YZA890123', 'Intel Core i7-11700', '32GB DDR4', '1TB SSD', 'Windows 11 Pro', 'Operativo', 1),
+    ('Lenovo', 'ThinkCentre M80q', 'BCD345678', 'Intel Core i7-11700', '32GB DDR4', '512GB SSD', 'Windows 11 Pro', 'Operativo', 1),
+    ('Dell', 'OptiPlex 7090', 'CDE456789', 'Intel Core i5-11500', '16GB DDR4', '512GB SSD', 'Windows 11 Pro', 'Operativo', 1),
+    ('HP', 'ProDesk 400 G7', 'EFG234567', 'Intel Core i5-11400', '16GB DDR4', '1TB HDD', 'Windows 11 Pro', 'Operativo', 1),
+    ('Lenovo', 'ThinkCentre M90q', 'FGH345678', 'Intel Core i5-11500', '16GB DDR4', '512GB SSD', 'Windows 11 Pro', 'Operativo', 1),
+    ('Dell', 'OptiPlex 7090', 'GHI456789', 'Intel Core i7-11700', '32GB DDR4', '1TB SSD', 'Windows 11 Pro', 'Operativo', 1);
+-- Material Adicional para el Laboratorio 1 (Electrónica)
+INSERT INTO Material_Adicional (nombre_objeto, categoria, cantidad, cantidad_minima, observaciones, Id_Laboratorio, reportado_por, fecha_compra, costo) 
+VALUES 
+    ('Multímetro Digital', 'Herramientas', 5, 3, 'Precisión ±0.5%', 1, 1, '2024-01-15', 150.00),
+    ('Soldador de Punto', 'Herramientas', 8, 5, 'Temperatura ajustable 200-450°C', 1, 1, '2024-02-10', 75.00),
+    ('Kit de Cables RJ45', 'Conectores', 20, 10, 'Cables CAT6 1m', 1, 1, '2024-03-05', 40.00),
+    ('Protoboard 830 Puntos', 'Componentes', 15, 8, 'Tamaño estándar', 1, 1, '2024-01-20', 25.00),
+    ('Fuente de Alimentación 12V', 'Componentes', 10, 5, '5A corriente', 1, 1, '2024-02-15', 60.00),
+    ('Osciloscopio USB', 'Equipos de Medición', 3, 2, '2 canales, 100MHz', 1, 1, '2024-03-10', 200.00),
+    ('Kit de Resistencias', 'Componentes', 25, 15, 'Valores E12', 1, 1, '2024-01-25', 30.00),
+    ('Generador de Funciones', 'Equipos de Medición', 2, 1, '10MHz, 2 canales', 1, 1, '2024-02-20', 300.00),
+    ('Multímetro Analógico', 'Herramientas', 8, 5, '20kΩ/V', 1, 1, '2024-03-15', 50.00),
+    ('Caja de Componentes', 'Almacenamiento', 12, 8, '40 compartimentos', 1, 1, '2024-01-30', 45.00),
+    ('Fuente de Alimentación Variable', 'Herramientas', 3, 2, '0-30V, 5A', 1, 1, '2024-02-25', 120.00),
+    ('Pinzas de Precisión', 'Herramientas', 15, 10, 'Set de 5 pares', 1, 1, '2024-03-10', 80.00),
+    ('Soldador de Vela', 'Herramientas', 5, 3, 'Temperatura ajustable', 1, 1, '2024-01-20', 45.00),
+    ('Cable de Datos USB', 'Conectores', 30, 20, '2m, USB 3.0', 1, 1, '2024-02-15', 15.00),
+    ('Termómetro Digital', 'Equipos de Medición', 4, 2, 'Precisión ±0.1°C', 1, 1, '2024-03-05', 90.00);
 
--- Equipos para el Laboratorio 2
-INSERT INTO Equipos (Marca, Modelo, Procesador, RAM, Almacenamiento, SO, Estado, Id_Laboratorio) VALUES
-('HP', 'EliteDesk 800', 'Intel Core i5-11400', '16GB', '512GB SSD', 'Windows 11 Pro', 'Operativo', 2),
-('Acer', 'Veriton M', 'Intel Core i3-10100', '8GB', '500GB HDD', 'Windows 10 Home', 'Operativo', 2),
-('Dell', 'OptiPlex 5090', 'Intel Core i5-11500', '16GB', '1TB SSD', 'Windows 11 Pro', 'Operativo', 2);
+-- Equipos para el Laboratorio 2 (Computación)
+INSERT INTO Equipos (Marca, Modelo, numero_de_serie, Procesador, RAM, Almacenamiento, SO, Estado, Id_Laboratorio) 
+VALUES 
+    ('HP', 'EliteDesk 800', 'IJK123456', 'Intel Core i5-11400', '16GB', '512GB SSD', 'Windows 11 Pro', 'Operativo', 2),
+    ('Acer', 'Veriton M', 'LMN789012', 'Intel Core i3-10100', '8GB', '500GB HDD', 'Windows 10 Home', 'Operativo', 2),
+    ('Dell', 'OptiPlex 5090', 'OPQ456789', 'Intel Core i5-11500', '16GB', '1TB SSD', 'Windows 11 Pro', 'Operativo', 2),
+    ('Lenovo', 'ThinkCentre M70s', 'NPR234567', 'Intel Core i5-11400', '16GB', '512GB SSD', 'Windows 11 Pro', 'Operativo', 2),
+    ('HP', 'ProDesk 600', 'MST123456', 'Intel Core i5-1135G7', '16GB', '512GB SSD', 'Windows 10 Pro', 'Operativo', 2),
+    ('Acer', 'Veriton X', 'RST789012', 'Intel Core i3-1115G4', '8GB', '256GB SSD', 'Windows 11 Home', 'Operativo', 2),
+    ('Dell', 'Vostro 3681', 'TUV456789', 'Intel Core i3-10105', '8GB', '256GB SSD', 'Windows 10 Pro', 'Operativo', 2),
+    ('Lenovo', 'ThinkCentre M80a', 'UVW234567', 'Intel Core i5-11400', '16GB', '512GB SSD', 'Windows 11 Pro', 'Operativo', 2),
+    ('HP', 'ProDesk 400', 'WXY123456', 'Intel Core i5-10400', '16GB', '512GB SSD', 'Windows 10 Pro', 'Operativo', 2),
+    ('Acer', 'Veriton S', 'VWX789012', 'Intel Core i3-1005G1', '8GB', '512GB SSD', 'Windows 11 Home', 'Operativo', 2),
+    ('Dell', 'OptiPlex 3080', 'XYZ456789', 'Intel Core i5-10500', '16GB', '1TB HDD', 'Windows 10 Pro', 'Operativo', 2),
+    ('Lenovo', 'ThinkCentre M70t', 'ZAB234567', 'Intel Core i7-10700', '32GB', '1TB SSD', 'Windows 11 Pro', 'Operativo', 2),
+    ('HP', 'EliteDesk 800', 'BCD123456', 'Intel Core i5-11400', '16GB', '512GB SSD', 'Windows 11 Pro', 'Operativo', 2),
+    ('Acer', 'Veriton M', 'CDE789012', 'Intel Core i3-10100', '8GB', '500GB HDD', 'Windows 10 Home', 'Operativo', 2),
+    ('Dell', 'OptiPlex 5090', 'EFG456789', 'Intel Core i5-11500', '16GB', '1TB SSD', 'Windows 11 Pro', 'Operativo', 2);
 
--- Equipos para el Laboratorio 3
-INSERT INTO Equipos (Marca, Modelo, Procesador, RAM, Almacenamiento, SO, Estado, Id_Laboratorio) VALUES
-('Lenovo', 'ThinkCentre M80s', 'Intel Core i7-11700', '32GB', '1TB SSD', 'Windows 11 Pro', 'Operativo', 3),
-('HP', 'ProDesk 600', 'Intel Core i5-1135G7', '16GB', '512GB SSD', 'Windows 10 Pro', 'Mantenimiento', 3),
-('Dell', 'Vostro 3681', 'Intel Core i3-10105', '8GB', '256GB SSD', 'Windows 10 Pro', 'Operativo', 3);
+-- Material Adicional para el Laboratorio 2 (Computación)
+INSERT INTO Material_Adicional (nombre_objeto, categoria, cantidad, cantidad_minima, observaciones, Id_Laboratorio, reportado_por, fecha_compra, costo) 
+VALUES 
+    ('Mouse y Teclado', 'Periféricos', 15, 5, 'Set completo inalámbrico', 2, 1, '2024-01-15', 60.00),
+    ('Pantallas LCD', 'Monitores', 8, 2, '24" Full HD', 2, 1, '2024-02-10', 180.00),
+    ('Webcams HD', 'Periféricos', 12, 4, '1080p con micrófono', 2, 1, '2024-03-05', 45.00),
+    ('Altavoces USB', 'Periféricos', 15, 5, '2.0 con subwoofer', 2, 1, '2024-01-20', 35.00),
+    ('Impresora Multifunción', 'Impresoras', 3, 1, 'Wi-Fi, escáner, fax', 2, 1, '2024-02-15', 250.00),
+    ('Scanner de Documentos', 'Periféricos', 2, 1, 'Alimentador automático', 2, 1, '2024-03-10', 200.00),
+    ('Cables HDMI', 'Conectores', 30, 20, '2m, 4K@60Hz', 2, 1, '2024-01-25', 15.00),
+    ('Cables USB-C', 'Conectores', 25, 15, '3.2 Gen 2, 20Gbps', 2, 1, '2024-02-20', 20.00),
+    ('Adaptadores USB-C', 'Accesorios', 20, 10, 'USB-C a USB-A', 2, 1, '2024-03-15', 10.00),
+    ('Soportes para Monitor', 'Accesorios', 12, 6, 'Ajustable en altura', 2, 1, '2024-01-30', 40.00),
+    ('Lámparas LED', 'Iluminación', 15, 10, 'Flexible, USB', 2, 1, '2024-02-25', 25.00),
+    ('Cargadores USB', 'Accesorios', 30, 20, '6 puertos, 60W', 2, 1, '2024-03-10', 30.00),
+    ('Etiquetadora', 'Accesorios', 5, 3, 'Autoalimentada', 2, 1, '2024-01-20', 50.00),
+    ('Cable Red', 'Conectores', 40, 30, 'CAT6, 1m', 2, 1, '2024-02-15', 5.00),
+    ('Switch USB', 'Accesorios', 10, 5, '4 puertos', 2, 1, '2024-03-05', 15.00);
 
+-- Equipos para el Laboratorio 3 (Redes y Telecomunicaciones)
+INSERT INTO Equipos (Marca, Modelo, numero_de_serie, Procesador, RAM, Almacenamiento, SO, Estado, Id_Laboratorio) 
+VALUES 
+    ('Lenovo', 'ThinkCentre M80s', 'PQR123456', 'Intel Core i7-11700', '32GB', '1TB SSD', 'Windows 11 Pro', 'Operativo', 3),
+    ('HP', 'ProDesk 600', 'STU789012', 'Intel Core i5-1135G7', '16GB', '512GB SSD', 'Windows 10 Pro', 'Operativo', 3),
+    ('Dell', 'Vostro 3681', 'VWX456789', 'Intel Core i3-10105', '8GB', '256GB SSD', 'Windows 10 Pro', 'Operativo', 3),
+    ('Lenovo', 'ThinkCentre M80a', 'XYZ234567', 'Intel Core i5-11400', '16GB', '512GB SSD', 'Windows 11 Pro', 'Operativo', 3),
+    ('HP', 'ProDesk 400', 'ZAB123456', 'Intel Core i5-10400', '16GB', '512GB SSD', 'Windows 10 Pro', 'Operativo', 3),
+    ('Dell', 'OptiPlex 3080', 'BCD789012', 'Intel Core i5-10500', '16GB', '1TB HDD', 'Windows 10 Pro', 'Operativo', 3),
+    ('Lenovo', 'ThinkCentre M70t', 'CDE456789', 'Intel Core i7-10700', '32GB', '1TB SSD', 'Windows 11 Pro', 'Operativo', 3),
+    ('HP', 'EliteDesk 800', 'EFG234567', 'Intel Core i5-11400', '16GB', '512GB SSD', 'Windows 11 Pro', 'Operativo', 3),
+    ('Dell', 'OptiPlex 5090', 'FGH456789', 'Intel Core i5-11500', '16GB', '1TB SSD', 'Windows 11 Pro', 'Operativo', 3),
+    ('Lenovo', 'ThinkCentre M80s', 'GHI234567', 'Intel Core i7-11700', '32GB', '1TB SSD', 'Windows 11 Pro', 'Operativo', 3),
+    ('HP', 'ProDesk 600', 'JKL123456', 'Intel Core i5-1135G7', '16GB', '512GB SSD', 'Windows 10 Pro', 'Operativo', 3),
+    ('Dell', 'Vostro 3681', 'MNO789012', 'Intel Core i3-10105', '8GB', '256GB SSD', 'Windows 10 Pro', 'Operativo', 3),
+    ('Lenovo', 'ThinkCentre M80a', 'PQR456789', 'Intel Core i5-11400', '16GB', '512GB SSD', 'Windows 11 Pro', 'Operativo', 3),
+    ('HP', 'ProDesk 400', 'STU234567', 'Intel Core i5-10400', '16GB', '512GB SSD', 'Windows 10 Pro', 'Operativo', 3),
+    ('Dell', 'OptiPlex 3080', 'UVW456789', 'Intel Core i5-10500', '16GB', '1TB HDD', 'Windows 10 Pro', 'Operativo', 3);
 
-INSERT INTO Material_Adicional (nombre_objeto, categoria, cantidad, cantidad_minima, Id_Laboratorio) VALUES
--- Electrónica (Laboratorio 1)
-('Fuente de Alimentación Regulable', 'Electrónica', 5, 1, 1),
-('Placa Arduino Uno', 'Electrónica', 10, 2, 1),
+-- Material Adicional para el Laboratorio 3 (Redes y Telecomunicaciones)
+INSERT INTO Material_Adicional (nombre_objeto, categoria, cantidad, cantidad_minima, observaciones, Id_Laboratorio, reportado_por, fecha_compra, costo) 
+VALUES 
+    ('Cable UTP Cat 6', 'Redes', 50, 10, 'Cables de 1m', 3, 1, '2024-01-15', 15.00),
+    ('Tarjetas de Red PCIe', 'Redes', 7, 2, 'Gigabit Ethernet', 3, 1, '2024-02-10', 45.00),
+    ('Router Gigabit', 'Equipos de Red', 3, 1, '8 puertos, Wi-Fi 6', 3, 1, '2024-03-05', 200.00),
+    ('Switch Gigabit', 'Equipos de Red', 5, 2, '16 puertos, gestionable', 3, 1, '2024-01-20', 150.00),
+    ('Antenas Wi-Fi', 'Redes', 8, 3, '2.4GHz/5GHz', 3, 1, '2024-02-15', 60.00),
+    ('Cable de Fibra Óptica', 'Conectores', 20, 10, 'LC/LC, 1m', 3, 1, '2024-03-10', 30.00),
+    ('Conectores RJ45', 'Conectores', 100, 50, 'Categoría 6', 3, 1, '2024-01-25', 5.00),
+    ('Tester de Cable', 'Herramientas', 5, 2, 'Cable y red', 3, 1, '2024-02-20', 80.00),
+    ('Sistema VoIP', 'Telecomunicaciones', 4, 2, 'Centralita IP', 3, 1, '2024-03-15', 250.00),
+    ('Teléfonos IP', 'Telecomunicaciones', 12, 6, 'Video HD', 3, 1, '2024-01-30', 120.00),
+    ('Adaptadores PoE', 'Redes', 15, 8, '60W, Gigabit', 3, 1, '2024-02-25', 40.00),
+    ('Cámara de Seguridad IP', 'Seguridad', 8, 4, '4K, IR', 3, 1, '2024-03-10', 180.00),
+    ('Servidor de VoIP', 'Equipos de Red', 2, 1, 'Virtualización', 3, 1, '2024-01-20', 400.00),
+    ('Punto de Acceso Wi-Fi', 'Redes', 10, 5, 'Indoor, Wave 2', 3, 1, '2024-02-15', 100.00),
+    ('Concentrador de Fibra', 'Conectores', 5, 2, '24 puertos', 3, 1, '2024-03-05', 120.00);
+    
+    
+use gestor;
+-- Insertar registros de mantenimiento para equipos
+INSERT INTO Mantenimiento (nombre, tipo, tipo_elemento, fecha_inicio, descripcion, Id_Usuario_Responsable, estado) VALUES
+('Revisión preventiva HP ProDesk', 'Preventivo', 'Equipo', '2024-01-10 09:00:00', 'Limpieza interna y actualización de drivers', 3, 'Completado'),
+('Cambio de disco duro Dell', 'Correctivo', 'Equipo', '2024-02-15 14:30:00', 'Reemplazo de HDD por SSD de 1TB', 3, 'Completado'),
+('Actualización de BIOS Lenovo', 'Actualización', 'Equipo', '2024-03-05 10:00:00', 'Actualización a última versión de BIOS', 3, 'En Proceso'),
+('Reparación fuente de poder', 'Correctivo', 'Material', '2024-01-20 11:00:00', 'Reparación de fuente de alimentación variable', 3, 'Completado'),
+('Calibración multímetros', 'Preventivo', 'Material', '2024-02-28 15:00:00', 'Calibración anual de equipos de medición', 3, 'Pendiente');
 
--- Computación (Laboratorio 2)
-('Mouse y Teclado', 'Computación', 15, 5, 2),
-('Pantallas LCD', 'Computación', 8, 2, 2),
+-- Relacionar mantenimientos con equipos (usando IDs que correspondan a tus equipos existentes)
+INSERT INTO Mantenimiento_Equipo (Id_Mantenimiento, Id_Equipo) VALUES
+(1, 1),  -- Mantenimiento 1 para Equipo 1 (HP ProDesk)
+(2, 3),  -- Mantenimiento 2 para Equipo 3 (Dell OptiPlex)
+(3, 2);  -- Mantenimiento 3 para Equipo 2 (Lenovo ThinkCentre)
 
--- Redes (Laboratorio 3)
-('Cable UTP Cat 6', 'Redes', 50, 10, 3),
-('Tarjetas de Red PCIe', 'Redes', 7, 2, 3);
+-- Relacionar mantenimientos con materiales (usando IDs que correspondan a tus materiales existentes)
+INSERT INTO Mantenimiento_Material (Id_Mantenimiento, N_Objeto) VALUES
+(4, 1),  -- Mantenimiento 4 para Material 1 (Multímetro Digital)
+(5, 6);  -- Mantenimiento 5 para Material 6 (Osciloscopio USB)
+
+-- Registrar bajas de equipos
+INSERT INTO Dispositivos_Baja (Id_Equipo, fecha_baja, motivo, descripcion_motivo, autorizado_por, valor_contable) VALUES
+(5, '2024-01-15 10:00:00', 'Obsoleto', 'Equipo con más de 8 años de antigüedad, sin soporte técnico', 1, 250.00),
+(8, '2024-02-20 11:30:00', 'Daño Irreparable', 'Placa madre quemada por subida de voltaje', 1, 500.00);
+
+-- Registrar bajas de materiales
+INSERT INTO Dispositivos_Baja (N_Objeto, fecha_baja, motivo, descripcion_motivo, autorizado_por, valor_contable) VALUES
+(4, '2024-03-01 09:45:00', 'Pérdida', 'Protoboard no devuelto por estudiante', 1, 25.00),
+(12, '2024-01-30 14:15:00', 'Daño Irreparable', 'Pinzas de precisión con puntas rotas', 1, 15.00),
+(7, '2024-02-10 16:00:00', 'Actualización', 'Reemplazo por kit de resistencias más completo', 1, 30.00);
+
+-- Solicitudes de reposición
+INSERT INTO Reposicion_Dispositivos (fecha_solicitud, motivo, estado, cantidad, tipo_elemento, id_elemento) VALUES
+('2024-01-16 09:00:00', 'Reposición por equipo obsoleto', 'Aprobado', 1, 'Equipo', 5),
+('2024-02-21 10:00:00', 'Reposición por daño irreparable', 'Pendiente', 1, 'Equipo', 8),
+('2024-03-02 11:00:00', 'Reposición por material perdido', 'Completado', 2, 'Material', 4),
+('2024-01-31 14:30:00', 'Reposición por herramienta dañada', 'Aprobado', 5, 'Material', 12),
+('2024-02-11 16:30:00', 'Actualización de componentes', 'Completado', 10, 'Material', 7);
+
+-- Relacionar bajas con reposiciones
+INSERT INTO Relacion_Baja_Reposicion (Id_Baja, Id_Reposicion) VALUES
+(1, 1),
+(2, 2),
+(3, 3),
+(4, 4),
+(5, 5);
 
 

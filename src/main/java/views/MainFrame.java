@@ -103,6 +103,7 @@ public class MainFrame extends JFrame {
             mainPanel.add("calendar", calendarPanel);
             mainPanel.add("reservations", reservacionPanel);
             mainPanel.add("gestionIncidentes", gestionIncidentesPanel); // Agregar nuevo panel
+            mainPanel.add("historial", new HistorialPanel(currentUser));
         } else if ("Técnico(a) de Mantenimiento".equals(userRole)) {
             mantenimientoPanel = new MantenimientoPanel(currentUser);
             mainPanel.add("maintenance", mantenimientoPanel);
@@ -135,6 +136,7 @@ public class MainFrame extends JFrame {
         toolBar.add(createToolBarButton("Mantenimiento", "maintenance"));
         toolBar.add(createToolBarButton("Reportes", "reportes"));
         toolBar.add(createToolBarButton("Gestión Incidentes", "gestionIncidentes")); // Nuevo botón
+        toolBar.add(createToolBarButton("Historial", "historial"));
         } else if ("Técnico(a) de Mantenimiento".equals(userRole)) {
             toolBar.add(createToolBarButton("Mantenimiento", "maintenance"));
         } else if ("Docente".equals(userRole)) {
@@ -196,6 +198,9 @@ public class MainFrame extends JFrame {
             case "usuario":
                 usuarioPanel = new UsuarioPanel(currentUser, this);
                 break;
+            case "historial":
+            // No necesitamos recrear el panel cada vez
+            break;
         }
         cardLayout.show(mainPanel, panelName);
     }

@@ -372,7 +372,7 @@ public class MantenimientoPanel extends JPanel implements DatabaseConnection.Dat
                 g2d.setColor(new Color(0, 0, 0, 50));
                 g2d.setStroke(new BasicStroke(1.5f));
                 g2d.drawRoundRect(0, 0, getWidth()-1, getHeight()-1, 15, 15);
-                g2d.setColor(Color.WHITE);
+                g2d.setColor(Color.BLACK);
                 FontMetrics fm = g2d.getFontMetrics();
                 Rectangle2D r = fm.getStringBounds(getText(), g2d);
                 int x = (getWidth() - (int) r.getWidth()) / 2;
@@ -604,7 +604,7 @@ public class MantenimientoPanel extends JPanel implements DatabaseConnection.Dat
                     c.setBackground(new Color(255, 200, 200));
                     break;
                 default:
-                    c.setBackground(Color.WHITE);
+                    c.setBackground(Color.BLACK);
             }
             
             if (isSelected) {
@@ -637,7 +637,7 @@ public class MantenimientoPanel extends JPanel implements DatabaseConnection.Dat
                     c.setBackground(new Color(255, 200, 200));
                     break;
                 default:
-                    c.setBackground(Color.WHITE);
+                    c.setBackground(Color.BLACK);
             }
             
             if (isSelected) {
