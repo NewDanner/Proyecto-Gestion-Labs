@@ -1,0 +1,3 @@
+Este es un bot para telegram, que funciona usando este link:
+https://t.me/Gestor_Labs_bot
+Ahi te llevara al bot apenas inicies el programa, el bot ayuda a agilizar la reservas de laboratorios de una forma a distancia.
