@@ -1,9 +1,9 @@
 -- Eliminar la base de datos existente si es necesario
-DROP DATABASE IF EXISTS GESTOR;
+DROP DATABASE IF EXISTS GESTORV2;
 
 -- Crear la base de datos nuevamente
-CREATE DATABASE GESTOR;
-USE GESTOR;
+CREATE DATABASE GESTORV2;
+USE GESTORV2;
 
 -- Tabla Usuarios 
 CREATE TABLE Usuarios (
@@ -253,7 +253,8 @@ BEGIN
 END //
 DELIMITER ;
 
-USE GESTOR4;
+USE GESTORV2;
+
 CREATE OR REPLACE VIEW Reporte_Laboratorios AS
 SELECT 
     l.Id_Laboratorio,
@@ -310,12 +311,12 @@ LEFT JOIN Material_Adicional ma ON db.N_Objeto = ma.N_Objeto
 LEFT JOIN Usuarios u ON db.autorizado_por = u.id_usuario;
 
 -- VISTAS PARA GENERAR REPORTES.
-USE GESTOR;
+USE GESTORV2;
 SELECT * FROM Reporte_Laboratorios;
 SELECT * FROM Reporte_Mantenimiento;
 SELECT * FROM Reporte_Dispositivos_Baja;
 
-USE GESTOR;
+USE GESTORV2;
 -- TRIGGERS
 -- Trigger para INSERT en Usuarios
 DELIMITER //
@@ -607,25 +608,13 @@ DELIMITER ;
 
 
 
-USE GESTOR;
+USE GESTORV2;
 -- Usuario Administrador
+-- Solo para crear usuarios, para el inicio de sesion debe crearse de forma manual
 INSERT INTO Usuarios (nombre, segundo_nombre, primer_apellido, segundo_apellido, turno, username, password, ci, rol, sexo, estado, correo)
 VALUES ('Admin', NULL, 'Principal', NULL, 'Mañana', 'admin', 'admin', 11111111, 'Administrador(a)', 'Hombre', TRUE, 'admin@gmail.com');
 
--- Usuario Docente
-INSERT INTO Usuarios (nombre, segundo_nombre, primer_apellido, segundo_apellido, turno, username, password, ci, rol, sexo, estado)
-VALUES ('Lucía', 'María', 'Pérez', 'González', 'Tarde', 'lperez', '12345', 22222222, 'Docente', 'Mujer', TRUE);
--- Usuario Docente
-INSERT INTO Usuarios (nombre, primer_apellido, turno, username, password, ci, rol, sexo) VALUES
-('Juan', 'Pérez', 'Mañana', 'juanperez', '123456', 10123456, 'Docente', 'Hombre'),
-('María', 'González', 'Tarde', 'mariagonzalez', 'abcdef', 10123457, 'Administrador(a)', 'Mujer'),
-('Carlos', 'Ramírez', 'Noche', 'carlosramirez', 'xyz987', 10123458, 'Técnico(a) de Mantenimiento', 'Hombre');
-
--- Usuario Técnico(a) de Mantenimiento
-INSERT INTO Usuarios (nombre, segundo_nombre, primer_apellido, segundo_apellido, turno, username, password, ci, rol, sexo, estado)
-VALUES ('Juan', 'Carlos', 'Rodríguez', 'Fernández', 'Noche', 'jrodriguez', '67890', 33333333, 'Técnico(a) de Mantenimiento', 'Hombre', TRUE);
-
-use gestor;
+use gestorv2;
 INSERT INTO Laboratorios (nombre, capacidad, descripcion, estado) VALUES
 ('Laboratorio 1', 30, 'Laboratorio de electrónica avanzada', 'Disponible'),
 ('Laboratorio 2', 25, 'Laboratorio de computación con estaciones de trabajo', 'Disponible'),
@@ -635,7 +624,7 @@ INSERT INTO Laboratorios (nombre, capacidad, descripcion, estado) VALUES
 ('Laboratorio 6', 28, 'Laboratorio de programación y desarrollo', 'Disponible'),
 ('Laboratorio 7', 30, 'Laboratorio de seguridad informática', 'Disponible');
 
-USE GESTOR;
+USE GESTORV2;
 -- Equipos para el Laboratorio 1 (Electrónica)
 INSERT INTO Equipos (Marca, Modelo, numero_de_serie, Procesador, RAM, Almacenamiento, SO, Estado, Id_Laboratorio) 
 VALUES 
@@ -750,7 +739,7 @@ VALUES
     ('Concentrador de Fibra', 'Conectores', 5, 2, '24 puertos', 3, 1, '2024-03-05', 120.00);
     
     
-use gestor4;
+use gestorv2;
 -- Insertar registros de mantenimiento para equipos
 INSERT INTO Mantenimiento (nombre, tipo, tipo_elemento, fecha_inicio, descripcion, Id_Usuario_Responsable, estado) VALUES
 ('Revisión preventiva HP ProDesk', 'Preventivo', 'Equipo', '2024-01-10 09:00:00', 'Limpieza interna y actualización de drivers', 3, 'Completado'),
