@@ -16,6 +16,7 @@ import java.time.LocalDate;
 import java.time.LocalTime;
 import java.time.format.DateTimeFormatter;
 import java.util.*;
+import org.mindrot.jbcrypt.BCrypt;
 
 public class LaboratorioBot extends TelegramLongPollingBot {
 
@@ -238,18 +239,23 @@ public class LaboratorioBot extends TelegramLongPollingBot {
     }
 
     private boolean authenticate(String username, String password) {
-        String query = "SELECT * FROM Usuarios WHERE username = ? AND password = ?";
-        try (Connection conn = DatabaseUtil.getConnection();
-             PreparedStatement stmt = conn.prepareStatement(query)) {
-            stmt.setString(1, username);
-            stmt.setString(2, password);
-            ResultSet rs = stmt.executeQuery();
-            return rs.next();
-        } catch (SQLException e) {
-            e.printStackTrace();
-            return false;
+    String query = "SELECT password FROM Usuarios WHERE username = ?";
+    try (Connection conn = DatabaseUtil.getConnection();
+         PreparedStatement stmt = conn.prepareStatement(query)) {
+        stmt.setString(1, username);
+        ResultSet rs = stmt.executeQuery();
+        
+        if (rs.next()) {
+            String hashedPassword = rs.getString("password");
+            // Verificar la contraseña con BCrypt
+            return BCrypt.checkpw(password, hashedPassword);
         }
+        return false;
+    } catch (SQLException e) {
+        e.printStackTrace();
+        return false;
     }
+}
 
     private void showLaboratories(long chatId) {
         String query = "SELECT nombre FROM Laboratorios WHERE estado = 'Disponible' ORDER BY nombre";
