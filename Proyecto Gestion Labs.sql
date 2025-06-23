@@ -785,3 +785,337 @@ INSERT INTO Relacion_Baja_Reposicion (Id_Baja, Id_Reposicion) VALUES
 (3, 3),
 (4, 4),
 (5, 5);
+
+CREATE OR REPLACE PACKAGE gestion_laboratorios AS
+    -- Procedimiento para realizar una reserva de laboratorio
+    PROCEDURE realizar_reserva(
+        p_id_laboratorio IN NUMBER,
+        p_id_usuario IN NUMBER,
+        p_tipo_prestamo IN VARCHAR2,
+        p_materia IN VARCHAR2,
+        p_fecha IN DATE,
+        p_hora_inicio IN TIMESTAMP,
+        p_hora_fin IN TIMESTAMP,
+        p_usa_material IN NUMBER DEFAULT 0,
+        p_resultado OUT VARCHAR2,
+        p_id_reserva OUT NUMBER
+    );
+    
+    -- Procedimiento para actualizar el estado de un laboratorio
+    PROCEDURE actualizar_estado_laboratorio(
+        p_id_laboratorio IN NUMBER,
+        p_nuevo_estado IN VARCHAR2,
+        p_resultado OUT VARCHAR2
+    );
+    
+    -- Función para obtener el docente con más reservas en un período
+    FUNCTION obtener_docente_mas_reservas(
+        p_fecha_inicio IN DATE,
+        p_fecha_fin IN DATE
+    ) RETURN VARCHAR2;
+    
+    -- Función para verificar disponibilidad de laboratorio
+    FUNCTION verificar_disponibilidad_laboratorio(
+        p_id_laboratorio IN NUMBER,
+        p_fecha IN DATE,
+        p_hora_inicio IN TIMESTAMP,
+        p_hora_fin IN TIMESTAMP
+    ) RETURN BOOLEAN;
+END gestion_laboratorios;
+/
+
+CREATE OR REPLACE PACKAGE BODY gestion_laboratorios AS
+    -- Procedimiento para realizar una reserva de laboratorio
+    PROCEDURE realizar_reserva(
+        p_id_laboratorio IN NUMBER,
+        p_id_usuario IN NUMBER,
+        p_tipo_prestamo IN VARCHAR2,
+        p_materia IN VARCHAR2,
+        p_fecha IN DATE,
+        p_hora_inicio IN TIMESTAMP,
+        p_hora_fin IN TIMESTAMP,
+        p_usa_material IN NUMBER DEFAULT 0,
+        p_resultado OUT VARCHAR2,
+        p_id_reserva OUT NUMBER
+    ) IS
+        v_lab_existe NUMBER;
+        v_user_existe NUMBER;
+        v_user_rol VARCHAR2(50);
+        v_disponible BOOLEAN;
+        v_hora_actual TIMESTAMP := SYSTIMESTAMP;
+    BEGIN
+        -- Verificar que el laboratorio existe
+        SELECT COUNT(*) INTO v_lab_existe
+        FROM Laboratorios
+        WHERE Id_Laboratorio = p_id_laboratorio;
+        
+        IF v_lab_existe = 0 THEN
+            p_resultado := 'Error: Laboratorio no encontrado';
+            p_id_reserva := NULL;
+            RETURN;
+        END IF;
+        
+        -- Verificar que el usuario existe
+        SELECT COUNT(*), MAX(rol) INTO v_user_existe, v_user_rol
+        FROM Usuarios
+        WHERE id_usuario = p_id_usuario;
+        
+        IF v_user_existe = 0 THEN
+            p_resultado := 'Error: Usuario no encontrado';
+            p_id_reserva := NULL;
+            RETURN;
+        END IF;
+        
+        -- Solo docentes pueden reservar para clases
+        IF p_tipo_prestamo = 'Clase' AND v_user_rol != 'Docente' THEN
+            p_resultado := 'Error: Solo los docentes pueden reservar para clases';
+            p_id_reserva := NULL;
+            RETURN;
+        END IF;
+        
+        -- Validar tipo de préstamo
+        IF p_tipo_prestamo NOT IN ('Clase', 'Mantenimiento') THEN
+            p_resultado := 'Error: Tipo de préstamo no válido (Clase/Mantenimiento)';
+            p_id_reserva := NULL;
+            RETURN;
+        END IF;
+        
+        -- Validar materia
+        IF p_materia NOT IN ('Electrónica', 'Hardware', 'Redes y Telecomunicaciones') THEN
+            p_resultado := 'Error: Materia no válida';
+            p_id_reserva := NULL;
+            RETURN;
+        END IF;
+        
+        -- Validar fechas
+        IF p_fecha < TRUNC(SYSDATE) THEN
+            p_resultado := 'Error: No se pueden hacer reservas en fechas pasadas';
+            p_id_reserva := NULL;
+            RETURN;
+        END IF;
+        
+        IF p_hora_inicio >= p_hora_fin THEN
+            p_resultado := 'Error: La hora de fin debe ser posterior a la hora de inicio';
+            p_id_reserva := NULL;
+            RETURN;
+        END IF;
+        
+        -- Verificar disponibilidad
+        v_disponible := verificar_disponibilidad_laboratorio(
+            p_id_laboratorio => p_id_laboratorio,
+            p_fecha => p_fecha,
+            p_hora_inicio => p_hora_inicio,
+            p_hora_fin => p_hora_fin
+        );
+        
+        IF NOT v_disponible THEN
+            p_resultado := 'Error: El laboratorio no está disponible en el horario solicitado';
+            p_id_reserva := NULL;
+            RETURN;
+        END IF;
+        
+        -- Insertar la reserva
+        INSERT INTO Reservas (
+            Nro_Laboratorio, tipo_de_prestamo, materia, fecha_reserva,
+            hora_inicio, hora_fin, estado, id_usuario, usa_material_adicional
+        ) VALUES (
+            p_id_laboratorio, p_tipo_prestamo, p_materia, p_fecha,
+            p_hora_inicio, p_hora_fin, 'Confirmado', p_id_usuario, p_usa_material
+        ) RETURNING Id_Reserva INTO p_id_reserva;
+        
+        COMMIT;
+        p_resultado := 'Reserva realizada exitosamente. ID de reserva: ' || p_id_reserva;
+        
+    EXCEPTION
+        WHEN OTHERS THEN
+            ROLLBACK;
+            p_resultado := 'Error al realizar reserva: ' || SQLERRM;
+            p_id_reserva := NULL;
+    END realizar_reserva;
+    
+    -- Procedimiento para actualizar el estado de un laboratorio
+    PROCEDURE actualizar_estado_laboratorio(
+        p_id_laboratorio IN NUMBER,
+        p_nuevo_estado IN VARCHAR2,
+        p_resultado OUT VARCHAR2
+    ) IS
+        v_laboratorio_existe NUMBER;
+    BEGIN
+        -- Verificar que el laboratorio existe
+        SELECT COUNT(*) INTO v_laboratorio_existe
+        FROM Laboratorios
+        WHERE Id_Laboratorio = p_id_laboratorio;
+        
+        IF v_laboratorio_existe = 0 THEN
+            p_resultado := 'Error: El laboratorio con ID ' || p_id_laboratorio || ' no existe';
+            RETURN;
+        END IF;
+        
+        -- Verificar que el nuevo estado es válido
+        IF p_nuevo_estado NOT IN ('Disponible', 'En Mantenimiento', 'Fuera de Servicio') THEN
+            p_resultado := 'Error: Estado no válido. Los estados permitidos son: Disponible, En Mantenimiento, Fuera de Servicio';
+            RETURN;
+        END IF;
+        
+        -- Actualizar el estado del laboratorio
+        UPDATE Laboratorios
+        SET estado = p_nuevo_estado
+        WHERE Id_Laboratorio = p_id_laboratorio;
+        
+        COMMIT;
+        p_resultado := 'Estado del laboratorio ' || p_id_laboratorio || 
+                      ' actualizado a: ' || p_nuevo_estado;
+        
+    EXCEPTION
+        WHEN OTHERS THEN
+            ROLLBACK;
+            p_resultado := 'Error al actualizar estado del laboratorio: ' || SQLERRM;
+    END actualizar_estado_laboratorio;
+    
+    -- Función para obtener el docente con más reservas en un período
+    FUNCTION obtener_docente_mas_reservas(
+        p_fecha_inicio IN DATE,
+        p_fecha_fin IN DATE
+    ) RETURN VARCHAR2 IS
+        v_nombre_docente VARCHAR2(100);
+        v_apellido_docente VARCHAR2(100);
+        v_cantidad_reservas NUMBER;
+        v_resultado VARCHAR2(200);
+    BEGIN
+        -- Obtener el docente con más reservas en el período
+        SELECT u.nombre, u.primer_apellido, COUNT(*) AS num_reservas
+        INTO v_nombre_docente, v_apellido_docente, v_cantidad_reservas
+        FROM Reservas r
+        JOIN Usuarios u ON r.id_usuario = u.id_usuario
+        WHERE u.rol = 'Docente'
+        AND r.fecha_reserva BETWEEN p_fecha_inicio AND p_fecha_fin
+        AND r.estado IN ('Confirmado', 'Completado')
+        GROUP BY u.nombre, u.primer_apellido
+        ORDER BY num_reservas DESC
+        FETCH FIRST 1 ROW ONLY;
+        
+        v_resultado := 'Docente con más reservas: ' || v_nombre_docente || ' ' || 
+                      v_apellido_docente || ' con ' || v_cantidad_reservas || 
+                      ' reservas entre ' || TO_CHAR(p_fecha_inicio, 'DD/MM/YYYY') || 
+                      ' y ' || TO_CHAR(p_fecha_fin, 'DD/MM/YYYY');
+        
+        RETURN v_resultado;
+        
+    EXCEPTION
+        WHEN NO_DATA_FOUND THEN
+            RETURN 'No se encontraron reservas de docentes en el período especificado';
+        WHEN OTHERS THEN
+            RETURN 'Error al obtener docente con más reservas: ' || SQLERRM;
+    END obtener_docente_mas_reservas;
+    
+    -- Función para verificar disponibilidad de laboratorio
+    FUNCTION verificar_disponibilidad_laboratorio(
+        p_id_laboratorio IN NUMBER,
+        p_fecha IN DATE,
+        p_hora_inicio IN TIMESTAMP,
+        p_hora_fin IN TIMESTAMP
+    ) RETURN BOOLEAN IS
+        v_estado_lab VARCHAR2(20);
+        v_reservas_count NUMBER;
+        v_disponible BOOLEAN := TRUE;
+    BEGIN
+        -- Verificar estado del laboratorio
+        SELECT estado INTO v_estado_lab
+        FROM Laboratorios
+        WHERE Id_Laboratorio = p_id_laboratorio;
+        
+        IF v_estado_lab != 'Disponible' THEN
+            RETURN FALSE;
+        END IF;
+        
+        -- Verificar si hay reservas que se solapen con el horario solicitado
+        SELECT COUNT(*) INTO v_reservas_count
+        FROM Reservas
+        WHERE Nro_Laboratorio = p_id_laboratorio
+        AND fecha_reserva = p_fecha
+        AND estado IN ('Confirmado', 'Pendiente')
+        AND (
+            (hora_inicio < p_hora_fin AND hora_fin > p_hora_inicio)
+        );
+        
+        IF v_reservas_count > 0 THEN
+            v_disponible := FALSE;
+        END IF;
+        
+        RETURN v_disponible;
+        
+    EXCEPTION
+        WHEN NO_DATA_FOUND THEN
+            RETURN FALSE; 
+        WHEN OTHERS THEN
+            RETURN FALSE; 
+    END verificar_disponibilidad_laboratorio;
+END gestion_laboratorios;
+/
+
+
+
+
+
+DECLARE
+    v_resultado VARCHAR2(200);
+BEGIN
+    v_resultado := gestion_laboratorios.obtener_docente_mas_reservas(
+        p_fecha_inicio => TO_DATE('2023-06-01', 'YYYY-MM-DD'),
+        p_fecha_fin => TO_DATE('2023-06-30', 'YYYY-MM-DD')
+    );
+    
+    DBMS_OUTPUT.PUT_LINE('Resultado para junio 2023: ' || v_resultado);
+
+END;
+/
+
+DECLARE
+    v_resultado VARCHAR2(200);
+BEGIN
+    gestion_laboratorios.actualizar_estado_laboratorio(
+        p_id_laboratorio => 1,
+        p_nuevo_estado => 'En Mantenimiento',
+        p_resultado => v_resultado
+    );
+    
+    DBMS_OUTPUT.PUT_LINE(v_resultado);
+END;
+/
+
+BEGIN
+    IF gestion_laboratorios.verificar_disponibilidad_laboratorio(
+        p_id_laboratorio => 2,
+        p_fecha => TO_DATE('2023-06-15', 'YYYY-MM-DD'),
+        p_hora_inicio => TO_TIMESTAMP('2023-06-15 08:00:00', 'YYYY-MM-DD HH24:MI:SS'),
+        p_hora_fin => TO_TIMESTAMP('2023-06-15 10:00:00', 'YYYY-MM-DD HH24:MI:SS')
+    ) THEN
+        DBMS_OUTPUT.PUT_LINE('Laboratorio disponible');
+    ELSE
+        DBMS_OUTPUT.PUT_LINE('Laboratorio NO disponible');
+    END IF;
+END;
+/
+
+
+
+
+DECLARE
+    v_resultado VARCHAR2(200);
+    v_id_reserva NUMBER;
+BEGIN
+    gestion_laboratorios.realizar_reserva(
+        p_id_laboratorio => 3,
+        p_id_usuario => 2, 
+        p_tipo_prestamo => 'Clase',
+        p_materia => 'Redes y Telecomunicaciones',
+        p_fecha => TO_DATE('2025-06-20', 'YYYY-MM-DD'), 
+        p_hora_inicio => TO_TIMESTAMP('2025-06-20 08:00:00', 'YYYY-MM-DD HH24:MI:SS'),
+        p_hora_fin => TO_TIMESTAMP('2025-06-20 10:00:00', 'YYYY-MM-DD HH24:MI:SS'),
+        p_usa_material => 1,
+        p_resultado => v_resultado,
+        p_id_reserva => v_id_reserva
+    );
+    DBMS_OUTPUT.PUT_LINE(v_resultado);
+END;
+/
