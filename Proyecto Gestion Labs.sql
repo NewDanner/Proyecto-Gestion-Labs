@@ -1119,3 +1119,44 @@ BEGIN
     DBMS_OUTPUT.PUT_LINE(v_resultado);
 END;
 /
+
+--CURSOR IMPLÍCITO
+SQL> SET SERVEROUTPUT ON
+SQL> DECLARE
+
+BEGIN
+
+  SELECT nombre, rol, username, COUNT(id_reservas) AS total_reservas, MAX(fecha_reserva) AS ultima_fecha
+  FROM usuarios INNER JOIN reservas USING (id_usuario)
+  WHERE id_usuario = 4;
+
+  DBMS_OUTPUT.PUT_LINE(
+    'Nombre: ' || nombre || 
+    ' | Rol: ' || rol || 
+    ' | Username: ' || username || 
+    ' | Total reservas: ' || total_reservas || 
+    ' | Última reserva: ' || ultima_fecha
+  );
+
+END;
+/
+
+--CURSOR EXPLÍCITO
+SQL> DECLARE
+BEGIN
+  FOR explicito IN (
+    SELECT nombre, rol, username, COUNT(id_reservas) AS total_reservas, MAX(fecha_reserva) AS ultima_fecha
+    FROM usuarios
+    INNER JOIN reservas USING (id_usuario)
+  )
+  LOOP
+    DBMS_OUTPUT.PUT_LINE(
+      'Nombre: ' || nombre ||
+      ' | Rol: ' || rol ||
+      ' | Username: ' || username ||
+      ' | Total reservas: ' || total_reservas ||
+      ' | Ultima reserva: ' || ultima_fecha
+    );
+  END LOOP;
+END;
+/
